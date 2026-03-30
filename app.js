@@ -1,4 +1,6 @@
 // Estado Global
+const DEFAULT_SHEET_URL = 'https://docs.google.com/spreadsheets/d/1CJJ-dEYwWpY5tN3XPcEiquNPiguxTO-s2ikUgEOMvk4/edit?usp=sharing';
+
 const state = {
   despesas: [],
   receitas: [],
@@ -22,22 +24,20 @@ const tabButtons = document.querySelectorAll('.tab-btn');
 const tabContents = document.querySelectorAll('.tab-content');
 
 // INICIALIZAÇÃO
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
   // Set mês atual como padrão
   const hoje = new Date();
   const mesAtual = `${hoje.getFullYear()}-${String(hoje.getMonth() + 1).padStart(2, '0')}`;
   monthYearInput.value = mesAtual;
   state.mesSelecionado = mesAtual;
 
-  // Carregar dados do localStorage
-  carregarDados();
+  // Definir URL fixa ou usar o que estiver no localStorage
+  const savedUrl = localStorage.getItem('sheetUrl') || DEFAULT_SHEET_URL;
+  localStorage.setItem('sheetUrl', savedUrl);
+  sheetUrlInput.value = savedUrl;
 
-  // Se houver URL salva, pré-preenche e importa automaticamente
-  const savedUrl = localStorage.getItem('sheetUrl');
-  if (savedUrl) {
-    sheetUrlInput.value = savedUrl;
-    importarGoogleSheets(true); // importa em segundo plano
-  }
+  // Importar automaticamente e iniciar autosync
+  await importarGoogleSheets(true);
 
   // Render inicial
   atualizarPainel();
@@ -48,8 +48,27 @@ document.addEventListener('DOMContentLoaded', () => {
     atualizarPainel();
   });
 
+  // Esconde o botão import e campo URL para interface mais limpa
+  if (btnImportar) btnImportar.style.display = 'none';
+  if (sheetUrlInput) sheetUrlInput.style.display = 'none';
+
+  // Botão permanece funcional em caso de necessidade manual
   btnImportar.addEventListener('click', () => {
     importarGoogleSheets();
+  });
+
+  // Auto-salva a URL e importa automaticamente quando o campo é alterado
+  sheetUrlInput.addEventListener('change', async (e) => {
+    const newUrl = e.target.value.trim();
+    if (!newUrl) {
+      localStorage.removeItem('sheetUrl');
+      mostrarStatus('⚠️ URL da planilha removida. Informe uma planilha para continuar.', 'info');
+      return;
+    }
+
+    localStorage.setItem('sheetUrl', newUrl);
+    mostrarStatus('✅ URL da planilha salva. Importando automaticamente...', 'success');
+    await importarGoogleSheets(true);
   });
 
   tabButtons.forEach((btn) => {

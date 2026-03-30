@@ -10,7 +10,6 @@ const state = {
 const MONTHS = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
 
 // Elementos DOM
-const monthYearInput = document.getElementById('month-year');
 const yearSelect = document.getElementById('year-select');
 const monthButtonsWrapper = document.getElementById('month-buttons');
 const chartWrapper = document.getElementById('chart-wrapper');
@@ -33,7 +32,6 @@ document.addEventListener('DOMContentLoaded', async () => {
   // Set mês atual como padrão
   const hoje = new Date();
   const mesAtual = `${hoje.getFullYear()}-${String(hoje.getMonth() + 1).padStart(2, '0')}`;
-  monthYearInput.value = mesAtual;
   state.mesSelecionado = mesAtual;
 
   // Definir URL fixa ou usar o que estiver no localStorage
@@ -212,10 +210,10 @@ function extractMonthFrom(valor) {
 
   if (typeof valor === 'string') {
     const trimmed = valor.trim();
-    const m1 = trimmed.match(/^(\d{2})/(\d{4})$/); // 03/2025
+    const m1 = trimmed.match(/^(\d{2})\/(\d{4})$/); // 03/2025
     if (m1) return { month: Number(m1[1]), year: Number(m1[2]) };
 
-    const m2 = trimmed.match(/^(\d{4})-(\d{2})/); // 2025-03
+    const m2 = trimmed.match(/^(\d{4})-(\d{2})$/); // 2025-03
     if (m2) return { month: Number(m2[2]), year: Number(m2[1]) };
   }
 

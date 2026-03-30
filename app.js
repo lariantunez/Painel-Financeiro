@@ -248,12 +248,11 @@ function renderizarTabelas() {
 }
 
 // IMPORTAÇÃO (Manual JSON e Google Sheets automática)
-async function importarGoogleSheets() {
+async function importarGoogleSheets(silencioso = false) {
   const sheetInput = document.getElementById('sheet-url').value.trim();
 
   if (!sheetInput) {
-    mostrarStatus('⚠️ Informe o URL ou ID da planilha no campo acima.', 'error');
-    btnImportar.disabled = false;
+    if (!silencioso) mostrarStatus('⚠️ Informe o URL ou ID da planilha no campo acima.', 'error');
     return;
   }
 
@@ -265,25 +264,28 @@ async function importarGoogleSheets() {
       state.receitas = dados.receitas || [];
       salvarDados();
       atualizarPainel();
-      mostrarStatus('✅ Dados JSON importados com sucesso!', 'success');
+      if (!silencioso) mostrarStatus('✅ Dados JSON importados com sucesso!', 'success');
+      iniciarAutoRefreshSePossivel();
       return;
     } catch (err) {
-      mostrarStatus('❌ Erro ao ler JSON. Verifique o formato e tente novamente.', 'error');
-      console.error(err);
-      btnImportar.disabled = false;
+      if (!silencioso) {
+        mostrarStatus('❌ Erro ao ler JSON. Verifique o formato e tente novamente.', 'error');
+        console.error(err);
+      }
       return;
     }
   }
 
   const spreadsheetId = extrairIdPlanilha(sheetInput);
   if (!spreadsheetId) {
-    mostrarStatus('❌ URL/ID da planilha inválido. Verifique e tente novamente.', 'error');
-    btnImportar.disabled = false;
+    if (!silencioso) mostrarStatus('❌ URL/ID da planilha inválido. Verifique e tente novamente.', 'error');
     return;
   }
 
-  mostrarStatus('⏳ Buscando dados do Google Sheets...', 'info');
-  btnImportar.disabled = true;
+  if (!silencioso) {
+    mostrarStatus('⏳ Buscando dados do Google Sheets...', 'info');
+    btnImportar.disabled = true;
+  }
 
   try {
     let despesas = [];
@@ -325,7 +327,7 @@ async function importarGoogleSheets() {
     }
 
     if (despesas.length === 0 && receitas.length === 0) {
-      mostrarStatus('❌ Não foram encontrados dados nas abas Despesas e Receitas.', 'error');
+      if (!silencioso) mostrarStatus('❌ Não foram encontrados dados nas abas Despesas e Receitas.', 'error');
       console.error('[importarGoogleSheets] Nenhum dado encontrado em nenhuma aba');
       return;
     }
@@ -338,12 +340,13 @@ async function importarGoogleSheets() {
     state.receitas = receitas;
     salvarDados();
     atualizarPainel();
-    mostrarStatus('✅ Dados importados do Google Sheets com sucesso!', 'success');
+    if (!silencioso) mostrarStatus('✅ Dados importados do Google Sheets com sucesso!', 'success');
+    iniciarAutoRefreshSePossivel();
   } catch (err) {
     console.error(err);
-    mostrarStatus('❌ Falha ao importar Google Sheets. Veja console para detalhes.', 'error');
+    if (!silencioso) mostrarStatus('❌ Falha ao importar Google Sheets. Veja console para detalhes.', 'error');
   } finally {
-    btnImportar.disabled = false;
+    if (!silencioso) btnImportar.disabled = false;
   }
 }
 
@@ -497,6 +500,52 @@ function parseCsvLine(line, delimiter) {
   }
   values.push(current);
   return values.map((v) => v.trim());
+}
+
+// ══════════════════════════════════════════════════════
+// AUTO-REFRESH em tempo real — polling a cada 30s, silencioso
+// ══════════════════════════════════════════════════════
+const POLL_INTERVAL = 30000; // 30 segundos (mais conservador que 5s para evitar rate limits)
+let _pollTimer = null;
+let _polling = false; // lock: evita requisições paralelas
+let _lastUpdate = null;
+
+function startAutoRefresh() {
+  if (_pollTimer) return;
+  _pollTimer = setInterval(silentRefresh, POLL_INTERVAL);
+  console.log('[AutoRefresh] Iniciado - polling a cada 30s');
+}
+
+function stopAutoRefresh() {
+  if (_pollTimer) {
+    clearInterval(_pollTimer);
+    _pollTimer = null;
+  }
+  console.log('[AutoRefresh] Parado');
+}
+
+// Refresh silencioso: busca dados novos sem apagar filtros nem mudar aba
+async function silentRefresh() {
+  if (_polling) return; // evita requisições paralelas
+  _polling = true;
+
+  try {
+    console.log('[AutoRefresh] Buscando dados atualizados...');
+    await importarGoogleSheets(true); // true = silencioso
+    _lastUpdate = new Date();
+    console.log('[AutoRefresh] Dados atualizados em', _lastUpdate.toLocaleTimeString());
+  } catch (error) {
+    console.error('[AutoRefresh] Erro no refresh:', error.message);
+  } finally {
+    _polling = false;
+  }
+}
+
+// Iniciar auto-refresh quando dados são carregados
+function iniciarAutoRefreshSePossivel() {
+  if (state.despesas.length > 0 || state.receitas.length > 0) {
+    startAutoRefresh();
+  }
 }
 
 

@@ -213,13 +213,12 @@ function atualizarChart() {
     const receitaAltura = (receitasPorMes[i] / maxValue) * 100;
     const selectedMonth = state.mesSelecionado ? Number(state.mesSelecionado.split('-')[1]) : null;
     const activeClass = selectedMonth === i + 1 ? 'active' : '';
-    const tooltip = `${MONTHS[i]}\nReceitas: R$ ${formatarMoeda(receitasPorMes[i])}\nDespesas: R$ ${formatarMoeda(despesasPorMes[i])}`;
 
     chartHtml += `
-      <div class="chart-column ${activeClass}" data-month="${i + 1}" title="${tooltip}">
+      <div class="chart-column ${activeClass}" data-month="${i + 1}" data-dep="${despesasPorMes[i]}" data-rec="${receitasPorMes[i]}">
         <span class="chart-label">${MONTHS[i]}</span>
         <div class="chart-bar-despesa" style="height: ${Math.max(5, despesaAltura)}%"></div>
-        <div class="chart-point" style="bottom: ${Math.max(8, receitaAltura)}%" title="Receita R$ ${formatarMoeda(receitasPorMes[i])}"></div>
+        <div class="chart-point" style="bottom: ${Math.max(8, receitaAltura)}%"></div>
       </div>`;
   }
 
@@ -242,9 +241,20 @@ function atualizarChart() {
         tooltipEl.className = 'chart-tooltip';
         document.body.appendChild(tooltipEl);
       }
-      tooltipEl.style.left = `${e.pageX + 12}px`;
-      tooltipEl.style.top = `${e.pageY + 12}px`;
-      tooltipEl.textContent = column.getAttribute('title');
+
+      const monthName = MONTHS[Number(column.dataset.month) - 1];
+      const valorDespesa = Number(column.dataset.dep || 0);
+      const valorReceita = Number(column.dataset.rec || 0);
+      tooltipEl.innerHTML = `
+        <strong>${monthName}</strong><br>
+        Despesa: <span style="color:#ffcccc;">R$ ${formatarMoeda(valorDespesa)}</span><br>
+        Receita: <span style="color:#9fffaf;">R$ ${formatarMoeda(valorReceita)}</span>
+      `;
+
+      const offsetX = 14;
+      const offsetY = 18;
+      tooltipEl.style.left = `${e.pageX + offsetX}px`;
+      tooltipEl.style.top = `${e.pageY + offsetY}px`;
       tooltipEl.style.display = 'block';
     });
 

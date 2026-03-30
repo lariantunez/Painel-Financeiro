@@ -63,16 +63,17 @@ document.addEventListener('DOMContentLoaded', async () => {
   if (sheetUrlInput) {
     sheetUrlInput.addEventListener('change', async (e) => {
       const newUrl = e.target.value.trim();
-    if (!newUrl) {
-      localStorage.removeItem('sheetUrl');
-      mostrarStatus('⚠️ URL da planilha removida. Informe uma planilha para continuar.', 'info');
-      return;
-    }
+      if (!newUrl) {
+        localStorage.removeItem('sheetUrl');
+        mostrarStatus('⚠️ URL da planilha removida. Informe uma planilha para continuar.', 'info');
+        return;
+      }
 
-    localStorage.setItem('sheetUrl', newUrl);
-    mostrarStatus('✅ URL da planilha salva. Importando automaticamente...', 'success');
-    await importarGoogleSheets(true);
-  });
+      localStorage.setItem('sheetUrl', newUrl);
+      mostrarStatus('✅ URL da planilha salva. Importando automaticamente...', 'success');
+      await importarGoogleSheets(true);
+    });
+  }
 
   tabButtons.forEach((btn) => {
     btn.addEventListener('click', () => {

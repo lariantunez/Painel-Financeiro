@@ -280,16 +280,22 @@ function renderizarTabelas() {
 
 // IMPORTAÇÃO (Manual JSON e Google Sheets automática)
 async function importarGoogleSheets(silencioso = false) {
-  let sheetInput = document.getElementById('sheet-url').value.trim();
+  const sheetInputField = document.getElementById('sheet-url');
+  let sheetInput = '';
+
+  if (sheetInputField) {
+    sheetInput = sheetInputField.value.trim();
+  }
+
   if (!sheetInput) {
-    sheetInput = localStorage.getItem('sheetUrl') || '';
-    if (sheetInput) {
-      sheetUrlInput.value = sheetInput;
+    sheetInput = localStorage.getItem('sheetUrl') || DEFAULT_SHEET_URL;
+    if (sheetInputField) {
+      sheetInputField.value = sheetInput;
     }
   }
 
   if (!sheetInput) {
-    if (!silencioso) mostrarStatus('⚠️ Informe o URL ou ID da planilha no campo acima.', 'error');
+    if (!silencioso) mostrarStatus('⚠️ URL da planilha não encontrada.', 'error');
     return;
   }
 

@@ -159,13 +159,15 @@ body {
   padding: 30px;
   background: #1e2d3f;
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-  gap: 20px;
+  grid-template-columns: repeat(3, minmax(220px, 1fr));
+  gap: 16px;
+  align-items: start;
 }
 
 .card {
   background: #24334a;
   box-shadow: 0 6px 22px rgba(0, 0, 0, 0.35);
+  min-height: 160px;
 }
 
 .card:hover {

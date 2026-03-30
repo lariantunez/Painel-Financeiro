@@ -621,7 +621,7 @@ function formatarData(dataStr) {
     return dataStr;
   }
 }
-
+//teste
 function escapeHtml(str) {
   const div = document.createElement('div');
   div.textContent = str;

@@ -17,6 +17,7 @@ const infoSaldoEl = document.getElementById('info-saldo');
 const tbodyDespesasEl = document.getElementById('tbody-despesas');
 const tbodyReceitasEl = document.getElementById('tbody-receitas');
 const statusMessageEl = document.getElementById('status-message');
+const sheetUrlInput = document.getElementById('sheet-url');
 const tabButtons = document.querySelectorAll('.tab-btn');
 const tabContents = document.querySelectorAll('.tab-content');
 
@@ -30,6 +31,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Carregar dados do localStorage
   carregarDados();
+
+  // Se houver URL salva, pré-preenche e importa automaticamente
+  const savedUrl = localStorage.getItem('sheetUrl');
+  if (savedUrl) {
+    sheetUrlInput.value = savedUrl;
+    importarGoogleSheets(true); // importa em segundo plano
+  }
 
   // Render inicial
   atualizarPainel();
@@ -249,11 +257,22 @@ function renderizarTabelas() {
 
 // IMPORTAÇÃO (Manual JSON e Google Sheets automática)
 async function importarGoogleSheets(silencioso = false) {
-  const sheetInput = document.getElementById('sheet-url').value.trim();
+  let sheetInput = document.getElementById('sheet-url').value.trim();
+  if (!sheetInput) {
+    sheetInput = localStorage.getItem('sheetUrl') || '';
+    if (sheetInput) {
+      sheetUrlInput.value = sheetInput;
+    }
+  }
 
   if (!sheetInput) {
     if (!silencioso) mostrarStatus('⚠️ Informe o URL ou ID da planilha no campo acima.', 'error');
     return;
+  }
+
+  // Se for URL válida, mantenha salvo para próximas visitas
+  if (!sheetInput.startsWith('{') && !sheetInput.startsWith('[')) {
+    localStorage.setItem('sheetUrl', sheetInput);
   }
 
   // Se o usuário colar um JSON direto no campo

@@ -1,6 +1,25 @@
 # 💰 Painel Financeiro V2
 
-Painel simples para análise de receitas e despesas por mês.
+Painel simples para análise de receitas e despesas por mês, com atualização automática em tempo real.
+
+## 🚀 Hospedagem no GitHub Pages
+
+Para rodar sem depender do PC:
+
+1. **Crie um repositório no GitHub** (ex: `painel-financeiro`)
+2. **Suba os arquivos**:
+   ```bash
+   git remote add origin https://github.com/SEU_USERNAME/painel-financeiro.git
+   git push -u origin master
+   ```
+3. **Habilite GitHub Pages**:
+   - Vá em Settings > Pages
+   - Source: Deploy from a branch
+   - Branch: master
+   - Salve
+4. **Acesse**: `https://SEU_USERNAME.github.io/painel-financeiro/`
+
+O painel fará polling automático a cada 30s para atualizar dados em tempo real!
 
 ## Estrutura esperada
 

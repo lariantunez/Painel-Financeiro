@@ -7,8 +7,13 @@ const state = {
   mesSelecionado: null,
 };
 
+const MONTHS = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
+
 // Elementos DOM
 const monthYearInput = document.getElementById('month-year');
+const yearSelect = document.getElementById('year-select');
+const monthButtonsWrapper = document.getElementById('month-buttons');
+const chartWrapper = document.getElementById('chart-wrapper');
 const btnImportar = document.getElementById('btn-importar');
 const totalReceitaEl = document.getElementById('total-receita');
 const totalDespesaEl = document.getElementById('total-despesa');
@@ -36,6 +41,11 @@ document.addEventListener('DOMContentLoaded', async () => {
   localStorage.setItem('sheetUrl', savedUrl);
   if (sheetUrlInput) sheetUrlInput.value = savedUrl;
 
+  // Render de navegação de ano e meses
+  renderYearOptions();
+  renderMonthButtons();
+  setCurrentMonthFromState();
+
   // Importar automaticamente e iniciar autosync
   await importarGoogleSheets(true);
 
@@ -43,10 +53,12 @@ document.addEventListener('DOMContentLoaded', async () => {
   atualizarPainel();
 
   // Event listeners
-  monthYearInput.addEventListener('change', (e) => {
-    state.mesSelecionado = e.target.value;
-    atualizarPainel();
+  yearSelect.addEventListener('change', () => {
+    const ano = yearSelect.value;
+    const mes = state.mesSelecionado ? state.mesSelecionado.split('-')[1] : '01';
+    setMesAno(ano, parseInt(mes, 10));
   });
+
 
   // Esconde o botão import e campo URL para interface mais limpa
   if (btnImportar) btnImportar.style.display = 'none';
@@ -116,6 +128,98 @@ function atualizarPainel() {
 
   // Render tabelas
   renderizarTabelas();
+  atualizarChart();
+}
+
+function renderYearOptions() {
+  if (!yearSelect) return;
+
+  const currentYear = new Date().getFullYear();
+  let html = '';
+  for (let year = currentYear - 2; year <= currentYear + 2; year++) {
+    html += `<option value="${year}">${year}</option>`;
+  }
+  yearSelect.innerHTML = html;
+}
+
+function renderMonthButtons() {
+  if (!monthButtonsWrapper) return;
+
+  monthButtonsWrapper.innerHTML = '';
+  MONTHS.forEach((label, index) => {
+    const btn = document.createElement('button');
+    btn.textContent = label;
+    btn.addEventListener('click', () => {
+      const ano = yearSelect ? yearSelect.value : String(new Date().getFullYear());
+      setMesAno(ano, index + 1);
+    });
+    monthButtonsWrapper.appendChild(btn);
+  });
+}
+
+function setMesAno(ano, mes) {
+  const monthNumber = String(mes).padStart(2, '0');
+  state.mesSelecionado = `${ano}-${monthNumber}`;
+
+  if (yearSelect) yearSelect.value = ano;
+
+  const buttons = monthButtonsWrapper ? monthButtonsWrapper.querySelectorAll('button') : [];
+  buttons.forEach((btn, idx) => {
+    btn.classList.toggle('active', idx + 1 === mes);
+  });
+
+  atualizarPainel();
+}
+
+function setCurrentMonthFromState() {
+  const data = state.mesSelecionado ? state.mesSelecionado.split('-') : null;
+  const ano = data ? data[0] : String(new Date().getFullYear());
+  const mes = data ? parseInt(data[1], 10) : (new Date().getMonth() + 1);
+
+  if (yearSelect) yearSelect.value = ano;
+  setMesAno(ano, mes);
+}
+
+function atualizarChart() {
+  if (!chartWrapper) return;
+
+  const ano = yearSelect ? Number(yearSelect.value) : new Date().getFullYear();
+  const receitasPorMes = Array(12).fill(0);
+  const despesasPorMes = Array(12).fill(0);
+
+  state.receitas.forEach((r) => {
+    const m = extractMonthFrom(r.mesReferencia || r.data || '');
+    if (m && m.year === ano) receitasPorMes[m.month - 1] += Number(r.valor) || 0;
+  });
+
+  state.despesas.forEach((d) => {
+    const m = extractMonthFrom(d.mesReferencia || d.vencimento || '');
+    if (m && m.year === ano) despesasPorMes[m.month - 1] += Number(d.valor) || 0;
+  });
+
+  let chartHtml = '';
+  const maxValue = Math.max(...receitasPorMes, ...despesasPorMes, 1);
+  for (let i = 0; i < 12; i++) {
+    const altura = (Math.max(receitasPorMes[i], despesasPorMes[i]) / maxValue) * 100;
+    const active = state.mesSelecionado.endsWith(String(i + 1).padStart(2, '0')) ? 'active' : '';
+    chartHtml += `<div class="chart-bar ${active}" style="height: ${Math.max(20, altura)}%" title="${MONTHS[i]}: R$${receitasPorMes[i].toFixed(2)} / -R$${despesasPorMes[i].toFixed(2)}"><span>${MONTHS[i]}</span></div>`;
+  }
+  chartWrapper.innerHTML = chartHtml;
+}
+
+function extractMonthFrom(valor) {
+  if (!valor) return null;
+
+  if (typeof valor === 'string') {
+    const trimmed = valor.trim();
+    const m1 = trimmed.match(/^(\d{2})/(\d{4})$/); // 03/2025
+    if (m1) return { month: Number(m1[1]), year: Number(m1[2]) };
+
+    const m2 = trimmed.match(/^(\d{4})-(\d{2})/); // 2025-03
+    if (m2) return { month: Number(m2[2]), year: Number(m2[1]) };
+  }
+
+  return null;
 }
 
 // CALCULAR TOTAIS

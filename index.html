@@ -14,16 +14,19 @@
       <p class="subtitle">Análise de Receitas e Despesas</p>
     </header>
 
-    <!-- FILTRO MÊS/ANO -->
+    <!-- FILTRO ANO/MÊS -->
     <section class="filter-section">
-      <div class="filter-group">
-        <label for="month-year">Mês/Ano:</label>
-        <input 
-          type="month" 
-          id="month-year" 
-          class="month-input"
-        />
+      <div class="year-select-group">
+        <label for="year-select">Ano:</label>
+        <select id="year-select" class="year-select"></select>
       </div>
+      <div class="month-buttons" id="month-buttons"></div>
+    </section>
+
+    <!-- GRÁFICO MÊSES -->
+    <section class="chart-section">
+      <div class="chart-title">Visão Mensal (Receitas vs Despesas)</div>
+      <div class="chart-wrapper" id="chart-wrapper"></div>
     </section>
 
     <!-- CARDS PRINCIPAIS -->

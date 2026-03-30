@@ -195,14 +195,66 @@ function atualizarChart() {
     if (m && m.year === ano) despesasPorMes[m.month - 1] += Number(d.valor) || 0;
   });
 
-  let chartHtml = '';
   const maxValue = Math.max(...receitasPorMes, ...despesasPorMes, 1);
+  const points = [];
+
+  let chartHtml = '<div class="chart-svg-overlay"><svg viewBox="0 0 100 100" preserveAspectRatio="none"><polyline stroke="#38ef7d" stroke-width="0.8" fill="none" points="';
+
   for (let i = 0; i < 12; i++) {
-    const altura = (Math.max(receitasPorMes[i], despesasPorMes[i]) / maxValue) * 100;
-    const active = state.mesSelecionado.endsWith(String(i + 1).padStart(2, '0')) ? 'active' : '';
-    chartHtml += `<div class="chart-bar ${active}" style="height: ${Math.max(20, altura)}%" title="${MONTHS[i]}: R$${receitasPorMes[i].toFixed(2)} / -R$${despesasPorMes[i].toFixed(2)}"><span>${MONTHS[i]}</span></div>`;
+    const x = (i + 0.5) * (100 / 12);
+    const y = 100 - (receitasPorMes[i] / maxValue) * 100;
+    points.push(`${x},${y.toFixed(2)}`);
   }
+
+  chartHtml += points.join(' ') + '"></polyline></svg></div>';
+
+  for (let i = 0; i < 12; i++) {
+    const despesaAltura = (despesasPorMes[i] / maxValue) * 100;
+    const receitaAltura = (receitasPorMes[i] / maxValue) * 100;
+    const selectedMonth = state.mesSelecionado ? Number(state.mesSelecionado.split('-')[1]) : null;
+    const activeClass = selectedMonth === i + 1 ? 'active' : '';
+    const tooltip = `${MONTHS[i]}\nReceitas: R$ ${formatarMoeda(receitasPorMes[i])}\nDespesas: R$ ${formatarMoeda(despesasPorMes[i])}`;
+
+    chartHtml += `
+      <div class="chart-column ${activeClass}" data-month="${i + 1}" title="${tooltip}">
+        <span class="chart-label">${MONTHS[i]}</span>
+        <div class="chart-bar-despesa" style="height: ${Math.max(5, despesaAltura)}%"></div>
+        <div class="chart-point" style="bottom: ${Math.max(8, receitaAltura)}%" title="Receita R$ ${formatarMoeda(receitasPorMes[i])}"></div>
+      </div>`;
+  }
+
   chartWrapper.innerHTML = chartHtml;
+
+  const columns = chartWrapper.querySelectorAll('.chart-column');
+  columns.forEach((column) => {
+    column.addEventListener('click', () => {
+      const month = Number(column.dataset.month);
+      const year = yearSelect ? yearSelect.value : new Date().getFullYear();
+      setMesAno(year, month);
+    });
+
+    column.addEventListener('mousemove', (e) => {
+      const existing = document.getElementById('chart-tooltip');
+      let tooltipEl = existing;
+      if (!tooltipEl) {
+        tooltipEl = document.createElement('div');
+        tooltipEl.id = 'chart-tooltip';
+        tooltipEl.className = 'chart-tooltip';
+        document.body.appendChild(tooltipEl);
+      }
+      tooltipEl.style.left = `${e.pageX + 12}px`;
+      tooltipEl.style.top = `${e.pageY + 12}px`;
+      tooltipEl.textContent = column.getAttribute('title');
+      tooltipEl.style.display = 'block';
+    });
+
+    column.addEventListener('mouseleave', () => {
+      const tooltipEl = document.getElementById('chart-tooltip');
+      if (tooltipEl) {
+        tooltipEl.style.display = 'none';
+      }
+    });
+  });
 }
 
 function extractMonthFrom(valor) {

@@ -34,7 +34,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   // Definir URL fixa ou usar o que estiver no localStorage
   const savedUrl = localStorage.getItem('sheetUrl') || DEFAULT_SHEET_URL;
   localStorage.setItem('sheetUrl', savedUrl);
-  sheetUrlInput.value = savedUrl;
+  if (sheetUrlInput) sheetUrlInput.value = savedUrl;
 
   // Importar automaticamente e iniciar autosync
   await importarGoogleSheets(true);
@@ -53,13 +53,16 @@ document.addEventListener('DOMContentLoaded', async () => {
   if (sheetUrlInput) sheetUrlInput.style.display = 'none';
 
   // Botão permanece funcional em caso de necessidade manual
-  btnImportar.addEventListener('click', () => {
-    importarGoogleSheets();
-  });
+  if (btnImportar) {
+    btnImportar.addEventListener('click', () => {
+      importarGoogleSheets();
+    });
+  }
 
   // Auto-salva a URL e importa automaticamente quando o campo é alterado
-  sheetUrlInput.addEventListener('change', async (e) => {
-    const newUrl = e.target.value.trim();
+  if (sheetUrlInput) {
+    sheetUrlInput.addEventListener('change', async (e) => {
+      const newUrl = e.target.value.trim();
     if (!newUrl) {
       localStorage.removeItem('sheetUrl');
       mostrarStatus('⚠️ URL da planilha removida. Informe uma planilha para continuar.', 'info');

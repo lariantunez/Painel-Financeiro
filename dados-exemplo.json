@@ -1,0 +1,46 @@
+{
+  "despesas": [
+    {
+      "nomeDespesa": "Aluguel",
+      "vencimento": "2026-03-05",
+      "valor": 1500.00
+    },
+    {
+      "nomeDespesa": "Energia",
+      "vencimento": "2026-03-10",
+      "valor": 250.00
+    },
+    {
+      "nomeDespesa": "Alimentação",
+      "vencimento": "2026-03-15",
+      "valor": 380.50
+    },
+    {
+      "nomeDespesa": "Internet",
+      "vencimento": "2026-03-08",
+      "valor": 89.90
+    },
+    {
+      "nomeDespesa": "Transporte",
+      "vencimento": "2026-03-20",
+      "valor": 120.00
+    }
+  ],
+  "receitas": [
+    {
+      "nome": "Larissa",
+      "tipo": "Salário",
+      "valor": 3500.00
+    },
+    {
+      "nome": "Douglas",
+      "tipo": "Salário",
+      "valor": 3200.00
+    },
+    {
+      "nome": "Larissa",
+      "tipo": "Freelancer",
+      "valor": 800.00
+    }
+  ]
+}

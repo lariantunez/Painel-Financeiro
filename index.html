@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Painel Financeiro - Receitas e Despesas</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="container">
+    <!-- HEADER -->
+    <header class="header">
+      <h1>💰 Painel Financeiro</h1>
+      <p class="subtitle">Análise de Receitas e Despesas</p>
+    </header>
+
+    <!-- FILTRO MÊS/ANO -->
+    <section class="filter-section">
+      <div class="filter-group">
+        <label for="month-year">Mês/Ano:</label>
+        <input 
+          type="month" 
+          id="month-year" 
+          class="month-input"
+        />
+      </div>
+      <div class="filter-group">
+        <label for="sheet-url">URL ou ID da Planilha:</label>
+        <input
+          type="text"
+          id="sheet-url"
+          class="sheet-url-input"
+          placeholder="https://docs.google.com/spreadsheets/d/ID..."
+        />
+      </div>
+      <button id="btn-importar" class="btn btn-primary">
+        📥 Importar do Google Sheets
+      </button>
+    </section>
+
+    <!-- CARDS PRINCIPAIS -->
+    <section class="cards-section">
+      <div class="card card-receita">
+        <div class="card-label">💵 Receitas</div>
+        <div class="card-value" id="total-receita">R$ 0,00</div>
+        <div class="card-info" id="info-receita">-</div>
+      </div>
+
+      <div class="card card-despesa">
+        <div class="card-label">💸 Despesas</div>
+        <div class="card-value" id="total-despesa">R$ 0,00</div>
+        <div class="card-info" id="info-despesa">-</div>
+      </div>
+
+      <div class="card card-saldo">
+        <div class="card-label">📊 Saldo</div>
+        <div class="card-value" id="total-saldo">R$ 0,00</div>
+        <div class="card-info" id="info-saldo">-</div>
+      </div>
+    </section>
+
+    <!-- ÁREA DE DADOS -->
+    <section class="data-section">
+      <div class="tabs">
+        <button class="tab-btn active" data-tab="despesas">📋 Despesas</button>
+        <button class="tab-btn" data-tab="receitas">💰 Receitas</button>
+      </div>
+
+      <!-- TAB: DESPESAS -->
+      <div class="tab-content active" id="tab-despesas">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Nome da Despesa</th>
+              <th>Vencimento</th>
+              <th>Valor</th>
+            </tr>
+          </thead>
+          <tbody id="tbody-despesas">
+            <tr><td colspan="3" style="text-align:center;color:#999;">Nenhuma despesa carregada</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- TAB: RECEITAS -->
+      <div class="tab-content" id="tab-receitas">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Nome</th>
+              <th>Tipo</th>
+              <th>Valor</th>
+            </tr>
+          </thead>
+          <tbody id="tbody-receitas">
+            <tr><td colspan="3" style="text-align:center;color:#999;">Nenhuma receita carregada</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- STATUS -->
+    <div id="status-message" class="status-message"></div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

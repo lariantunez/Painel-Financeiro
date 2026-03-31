@@ -50,11 +50,27 @@
       <div class="chart-wrapper" id="chart-wrapper"></div>
     </section>
 
+    <!-- GRÁFICO CATEGORIAS -->
+    <section class="chart-section">
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:4px;">
+        <div class="chart-title" style="margin-bottom:0;">Despesas por Categoria</div>
+        <div id="filtro-categoria-chip" style="display:none;"></div>
+      </div>
+      <div class="categoria-chart-wrapper" id="categoria-chart-wrapper"></div>
+    </section>
+
+    <!-- GRÁFICO PARCELADOS -->
+    <section class="chart-section" id="section-parcelados">
+      <div class="chart-title">💳 Projeção de Parcelas no Cartão</div>
+      <div id="parcelados-chart-wrapper"></div>
+    </section>
+
     <!-- ÁREA DE DADOS -->
     <section class="data-section">
       <div class="tabs">
         <button class="tab-btn active" data-tab="despesas">📋 Despesas</button>
         <button class="tab-btn" data-tab="receitas">💰 Receitas</button>
+        <button class="tab-btn" data-tab="parcelamentos">💳 Parcelamentos</button>
       </div>
 
       <!-- TAB: DESPESAS -->
@@ -65,6 +81,8 @@
               <th>Nome da Despesa</th>
               <th>Vencimento</th>
               <th>Valor</th>
+              <th>Parcelas</th>
+              <th>Tipo</th>
             </tr>
           </thead>
           <tbody id="tbody-despesas">
@@ -85,6 +103,23 @@
           </thead>
           <tbody id="tbody-receitas">
             <tr><td colspan="3" style="text-align:center;color:#999;">Nenhuma receita carregada</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <!-- TAB: PARCELAMENTOS -->
+      <div class="tab-content" id="tab-parcelamentos">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Nome da Despesa</th>
+              <th>Vencimento</th>
+              <th>Valor</th>
+              <th>Parcelas</th>
+              <th>Tipo</th>
+            </tr>
+          </thead>
+          <tbody id="tbody-parcelamentos">
+            <tr><td colspan="5" style="text-align:center;color:#999;">Nenhum parcelamento carregado</td></tr>
           </tbody>
         </table>
       </div>

@@ -5,9 +5,18 @@ const state = {
   despesas: [],
   receitas: [],
   mesSelecionado: null,
+  categoriaSelecionada: null,
 };
 
 const MONTHS = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
+
+function isCreditoParcelado(d) {
+  const forma = (d.formaPgto || '').trim().normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase();
+  const match = (d.parcelas || '').trim().match(/^(\d+)\/(\d+)$/);
+  const ok = forma === 'CREDITO PARCELADO' && !!match && parseInt(match[2], 10) > 1;
+  return ok;
+}
+
 
 // Elementos DOM
 const yearSelect = document.getElementById('year-select');
@@ -22,6 +31,7 @@ const infoDespesaEl = document.getElementById('info-despesa');
 const infoSaldoEl = document.getElementById('info-saldo');
 const tbodyDespesasEl = document.getElementById('tbody-despesas');
 const tbodyReceitasEl = document.getElementById('tbody-receitas');
+const tbodyParcelamentosEl = document.getElementById('tbody-parcelamentos');
 const statusMessageEl = document.getElementById('status-message');
 const sheetUrlInput = document.getElementById('sheet-url');
 const tabButtons = document.querySelectorAll('.tab-btn');
@@ -127,6 +137,8 @@ function atualizarPainel() {
   // Render tabelas
   renderizarTabelas();
   atualizarChart();
+  atualizarChartCategorias();
+  atualizarChartParcelados();
 }
 
 function renderYearOptions() {
@@ -158,6 +170,8 @@ function renderMonthButtons() {
 function setMesAno(ano, mes) {
   const monthNumber = String(mes).padStart(2, '0');
   state.mesSelecionado = `${ano}-${monthNumber}`;
+  state.categoriaSelecionada = null;
+  atualizarFiltroChip();
 
   if (yearSelect) yearSelect.value = ano;
 
@@ -213,12 +227,14 @@ function atualizarChart() {
     const receitaAltura = (receitasPorMes[i] / maxValue) * 100;
     const selectedMonth = state.mesSelecionado ? Number(state.mesSelecionado.split('-')[1]) : null;
     const activeClass = selectedMonth === i + 1 ? 'active' : '';
+    const barStyle = despesasPorMes[i] > 0 ? `height: ${despesaAltura}%` : 'height: 0';
+    const pointStyle = receitasPorMes[i] > 0 ? `bottom: ${receitaAltura}%; display: block` : 'display: none';
 
     chartHtml += `
       <div class="chart-column ${activeClass}" data-month="${i + 1}" data-dep="${despesasPorMes[i]}" data-rec="${receitasPorMes[i]}">
         <span class="chart-label">${MONTHS[i]}</span>
-        <div class="chart-bar-despesa" style="height: ${Math.max(5, despesaAltura)}%"></div>
-        <div class="chart-point" style="bottom: ${Math.max(8, receitaAltura)}%"></div>
+        <div class="chart-bar-despesa" style="${barStyle}"></div>
+        <div class="chart-point" style="${pointStyle}"></div>
       </div>`;
   }
 
@@ -245,17 +261,23 @@ function atualizarChart() {
       const monthName = MONTHS[Number(column.dataset.month) - 1];
       const valorDespesa = Number(column.dataset.dep || 0);
       const valorReceita = Number(column.dataset.rec || 0);
+      const saldo = valorReceita - valorDespesa;
+      const saldoCor = saldo >= 0 ? '#38ef7d' : '#ff6b6b';
+      const saldoSinal = saldo >= 0 ? '+' : '';
       tooltipEl.innerHTML = `
-        <strong>${monthName}</strong><br>
-        Despesa: <span style="color:#ffcccc;">R$ ${formatarMoeda(valorDespesa)}</span><br>
-        Receita: <span style="color:#9fffaf;">R$ ${formatarMoeda(valorReceita)}</span>
+        <div style="font-weight:700;margin-bottom:6px;color:#fff;border-bottom:1px solid #2d3d4f;padding-bottom:4px;">${monthName}</div>
+        <div>📈 Receita: <span style="color:#38ef7d;font-weight:600;">${formatarMoeda(valorReceita)}</span></div>
+        <div>📉 Despesa: <span style="color:#ff6b6b;font-weight:600;">${formatarMoeda(valorDespesa)}</span></div>
+        <div style="margin-top:4px;border-top:1px solid #2d3d4f;padding-top:4px;">💰 Saldo: <span style="color:${saldoCor};font-weight:700;">${saldoSinal}${formatarMoeda(saldo)}</span></div>
       `;
 
-      const offsetX = 14;
-      const offsetY = 18;
-      tooltipEl.style.left = `${e.pageX + offsetX}px`;
-      tooltipEl.style.top = `${e.pageY + offsetY}px`;
       tooltipEl.style.display = 'block';
+      tooltipEl.style.visibility = 'hidden';
+      const tooltipHeight = tooltipEl.offsetHeight;
+      const tooltipWidth = tooltipEl.offsetWidth;
+      tooltipEl.style.visibility = '';
+      tooltipEl.style.left = `${e.clientX - tooltipWidth / 2}px`;
+      tooltipEl.style.top = `${e.clientY - tooltipHeight - 8}px`;
     });
 
     column.addEventListener('mouseleave', () => {
@@ -282,9 +304,37 @@ function extractMonthFrom(valor) {
   return null;
 }
 
+// CHIP DE FILTRO ATIVO
+function atualizarFiltroChip() {
+  const chip = document.getElementById('filtro-categoria-chip');
+  if (!chip) return;
+  if (!state.categoriaSelecionada) {
+    chip.style.display = 'none';
+    chip.innerHTML = '';
+    return;
+  }
+  chip.style.display = 'inline-flex';
+  chip.style.cssText = 'display:inline-flex;align-items:center;gap:6px;background:#2d3d4f;border:1px solid #4a6080;border-radius:20px;padding:3px 10px;font-size:0.75rem;color:#e8eef7;cursor:pointer;';
+  chip.innerHTML = '🔍 ' + escapeHtml(state.categoriaSelecionada) + ' <span style="font-size:1rem;line-height:1;color:#aaa;">×</span>';
+  chip.onclick = function() {
+    state.categoriaSelecionada = null;
+    atualizarFiltroChip();
+    atualizarPainel();
+  };
+}
+
+// FILTRAR POR CATEGORIA
+function filtrarPorCategoria(dados) {
+  if (!state.categoriaSelecionada) return dados;
+  return dados.filter((d) => {
+    const cat = (d.tipo || '').trim() || 'Sem categoria';
+    return cat === state.categoriaSelecionada;
+  });
+}
+
 // CALCULAR TOTAIS
 function calcularTotais() {
-  const despesasFiltradas = filtrarPorMes(state.despesas);
+  const despesasFiltradas = filtrarPorCategoria(filtrarPorMes(state.despesas));
   const receitasFiltradas = filtrarPorMes(state.receitas);
 
   console.log(`[calcularTotais] Mês selecionado: ${state.mesSelecionado}`);
@@ -404,23 +454,36 @@ function formatarParaIso(dataStr) {
 
 // RENDERIZAR TABELAS
 function renderizarTabelas() {
-  const despesasFiltradas = filtrarPorMes(state.despesas);
+  const despesasFiltradas = filtrarPorCategoria(filtrarPorMes(state.despesas));
   const receitasFiltradas = filtrarPorMes(state.receitas);
+
+  // Monta mapa tipo → cor (mesma lógica do gráfico de categorias)
+  const totaisPorTipo = {};
+  despesasFiltradas.forEach((d) => {
+    const cat = (d.tipo || '').trim() || 'Sem categoria';
+    totaisPorTipo[cat] = (totaisPorTipo[cat] || 0) + (Number(d.valor) || 0);
+  });
+  const tiposOrdenados = Object.keys(totaisPorTipo).sort((a, b) => totaisPorTipo[b] - totaisPorTipo[a]);
+  const corPorTipo = {};
+  tiposOrdenados.forEach((t, i) => { corPorTipo[t] = CATEGORIA_CORES[i % CATEGORIA_CORES.length]; });
 
   // Despesas
   if (despesasFiltradas.length === 0) {
-    tbodyDespesasEl.innerHTML = '<tr><td colspan="3" style="text-align:center;color:#999;">Nenhuma despesa</td></tr>';
+    tbodyDespesasEl.innerHTML = '<tr><td colspan="5" style="text-align:center;color:#999;">Nenhuma despesa</td></tr>';
   } else {
     tbodyDespesasEl.innerHTML = despesasFiltradas
-      .map(
-        (d) => `
+      .map((d) => {
+        const cat = (d.tipo || '').trim() || 'Sem categoria';
+        const cor = corPorTipo[cat] || '#c8d8e8';
+        return `
         <tr>
           <td>${escapeHtml(d.nomeDespesa || d.nome || '')}</td>
           <td>${formatarData(d.vencimento || d.data || '')}</td>
           <td>${formatarMoeda(d.valor)}</td>
-        </tr>
-      `
-      )
+          <td style="text-align:center;color:#7fa8c8;">${escapeHtml(d.parcelas || '-')}</td>
+          <td class="td-tipo" style="--tipo-cor:${cor};color:${cor};font-weight:600;font-size:0.78rem;text-transform:uppercase;">${escapeHtml(cat === 'Sem categoria' ? (d.tipo || '') : cat)}</td>
+        </tr>`;
+      })
       .join('');
   }
 
@@ -439,6 +502,38 @@ function renderizarTabelas() {
       `
       )
       .join('');
+  }
+
+  // Parcelamentos — filtra por mês E por forma de pagamento parcelada
+  const parcelamentosFiltrados = filtrarPorCategoria(filtrarPorMes(state.despesas)).filter((d) => {
+    const forma = (d.formaPgto || '').trim().toUpperCase();
+    return isCreditoParcelado(d);
+  });
+
+  // Monta mapa de cores por tipo (igual despesas)
+  const totaisParc = {};
+  parcelamentosFiltrados.forEach((d) => {
+    const cat = (d.tipo || '').trim() || 'Sem categoria';
+    totaisParc[cat] = (totaisParc[cat] || 0) + (Number(d.valor) || 0);
+  });
+  const tiposOrdParc = Object.keys(totaisParc).sort((a, b) => totaisParc[b] - totaisParc[a]);
+  const corParc = {};
+  tiposOrdParc.forEach((t, i) => { corParc[t] = CATEGORIA_CORES[i % CATEGORIA_CORES.length]; });
+
+  if (parcelamentosFiltrados.length === 0) {
+    tbodyParcelamentosEl.innerHTML = '<tr><td colspan="5" style="text-align:center;color:#999;">Nenhum parcelamento no período</td></tr>';
+  } else {
+    tbodyParcelamentosEl.innerHTML = parcelamentosFiltrados.map((d) => {
+      const cat = (d.tipo || '').trim() || 'Sem categoria';
+      const cor = corParc[cat] || '#c8d8e8';
+      return `<tr>
+        <td>${escapeHtml(d.nomeDespesa || d.nome || '')}</td>
+        <td>${formatarData(d.vencimento || d.data || '')}</td>
+        <td>${formatarMoeda(d.valor)}</td>
+        <td style="text-align:center;color:#7fa8c8;">${escapeHtml(d.parcelas || '-')}</td>
+        <td class="td-tipo" style="color:${cor};font-weight:600;font-size:0.78rem;text-transform:uppercase;">${escapeHtml(cat === 'Sem categoria' ? (d.tipo || '') : cat)}</td>
+      </tr>`;
+    }).join('');
   }
 }
 
@@ -545,8 +640,9 @@ async function importarGoogleSheets(silencioso = false) {
     }
 
     console.log('[importarGoogleSheets] Dados finais - Despesas:', despesas.length, 'Receitas:', receitas.length);
-    console.log('[importarGoogleSheets] Primeira despesa:', despesas[0]);
-    console.log('[importarGoogleSheets] Primeira receita:', receitas[0]);
+    // Loga a primeira despesa com CRÉDITO PARCELADO para debug
+    const exemploParc = despesas.find((d) => isCreditoParcelado(d));
+    console.log('[DEBUG] Exemplo CRÉDITO PARCELADO:', JSON.stringify(exemploParc));
 
     state.despesas = despesas;
     state.receitas = receitas;
@@ -630,10 +726,19 @@ async function buscarDadosAba(spreadsheetId, nomeAba) {
   if (rows.length === 0) return [];
 
   if (nomeAba.toLowerCase() === 'despesas') {
+    // Detecta dinamicamente a coluna de forma de pagamento
+    const colForma = rows.length > 0
+      ? Object.keys(rows[0]).find((k) => k.toUpperCase().replace(/[\s_]/g, '').includes('FORMADEPGTO') || k.toUpperCase().replace(/[\s_]/g, '').includes('FORMAPGTO') || k.toUpperCase().includes('FORMA_DE_PGTO'))
+      : null;
+    console.log('[buscarDadosAba] Coluna FORMA detectada:', colForma);
+
     return rows.map((row) => ({
-      nomeDespesa: row.Nome || row.nome || row.NOME || row['Nome da Despesa'] || row['Descrição'] || row['descrição'] || '',
+      nomeDespesa: row.NOME_DESPESA || row['NOME DESPESA'] || row['Nome Despesa'] || row['nome_despesa'] || row.Nome || row.nome || row.NOME || row['Nome da Despesa'] || row['Descrição'] || row['descrição'] || row.Descricao || row.DESCRICAO || '',
       vencimento: row.Vencimento || row.vencimento || row.VENCIMENTO || row.Data || row.data || row.DATA || row['Data de Vencimento'] || row['Data Vencimento'] || '',
       valor: parseMoney(row.Valor || row.valor || row.VALOR || row['Valor Pago'] || row['R$'] || 0),
+      tipo: row.Tipo || row.tipo || row.TIPO || row['Categoria'] || row['categoria'] || '',
+      parcelas: row.Parcelas || row.parcelas || row.PARCELAS || row['Nº Parcelas'] || row['Numero Parcelas'] || row['NUM_PARCELAS'] || '',
+      formaPgto: (colForma ? row[colForma] : '') || row.FORMA_DE_PGTO || row['FORMA DE PGTO'] || row['Forma de Pagamento'] || row['forma_de_pgto'] || row.FormaPgto || '',
       mesReferencia: row['MES DE REFERENCIA'] || row['Mês de Referência'] || row['mes_de_referencia'] || '',
     }));
   }
@@ -761,6 +866,218 @@ function iniciarAutoRefreshSePossivel() {
 }
 
 
+// GRÁFICO DE PARCELADOS
+function atualizarChartParcelados() {
+  const wrapper = document.getElementById('parcelados-chart-wrapper');
+  if (!wrapper) return;
+
+  const ano = yearSelect ? Number(yearSelect.value) : new Date().getFullYear();
+
+  const parcelados = state.despesas.filter((d) => {
+    const forma = (d.formaPgto || '').trim().toUpperCase();
+    return isCreditoParcelado(d);
+  });
+
+  if (parcelados.length === 0) {
+    wrapper.innerHTML = '<div style="color:#6b8299;font-size:0.85rem;padding:12px 0;">Nenhuma compra parcelada encontrada.</div>';
+    return;
+  }
+
+  // Projeta parcelas em meses
+  const projecao = {};
+  for (let m = 1; m <= 12; m++) {
+    projecao[m] = { total: 0, itens: [] };
+  }
+
+  parcelados.forEach((d) => {
+    const parcelaStr = (d.parcelas || '').trim();
+    const match = parcelaStr.match(/^(\d+)\/(\d+)$/);
+    if (!match) return;
+
+    const parcelaAtual = parseInt(match[1], 10);
+    const totalParcelas = parseInt(match[2], 10);
+    if (!parcelaAtual || !totalParcelas) return;
+
+    const parsed = extractMonthFrom(d.mesReferencia || '');
+    if (!parsed) return;
+
+    // Mês base = mês da parcela 1
+    const baseDate = new Date(parsed.year, parsed.month - 1 - (parcelaAtual - 1), 1);
+
+    for (let i = 0; i < totalParcelas; i++) {
+      const mp = new Date(baseDate.getFullYear(), baseDate.getMonth() + i, 1);
+      if (mp.getFullYear() !== ano) continue;
+      const mes = mp.getMonth() + 1;
+      projecao[mes].total += Number(d.valor) || 0;
+      projecao[mes].itens.push({
+        nome: d.nomeDespesa || d.nome || '',
+        valor: Number(d.valor) || 0,
+        parcela: i + 1,
+        total: totalParcelas,
+      });
+    }
+  });
+
+  const maxTotal = Math.max(...Object.values(projecao).map((v) => v.total), 1);
+  const mesSelecionado = state.mesSelecionado ? Number(state.mesSelecionado.split('-')[1]) : null;
+
+  // Mesmo layout do chart-wrapper original
+  let html = '';
+  for (let i = 1; i <= 12; i++) {
+    const dados = projecao[i];
+    const isActive = mesSelecionado === i;
+    const altPct = dados.total > 0 ? (dados.total / maxTotal) * 100 : 0;
+    const activeClass = isActive ? 'active' : '';
+    html += `<div class="chart-column ${activeClass}" data-month="${i}" data-parc-total="${dados.total}" style="cursor:pointer;">
+      <span class="chart-label">${MONTHS[i - 1]}</span>
+      <div class="chart-bar-parc" style="height:${altPct}%;background:${isActive ? '#38ef7d' : '#3a7bd5'};${isActive ? 'box-shadow:0 0 8px #38ef7d88;' : ''}${dados.total === 0 ? 'opacity:0.15;' : ''}"></div>
+    </div>`;
+  }
+  wrapper.innerHTML = html;
+  wrapper.className = 'chart-wrapper';
+
+  // Clique para navegar ao mês
+  wrapper.querySelectorAll('.chart-column').forEach((col) => {
+    col.addEventListener('click', () => {
+      setMesAno(ano, Number(col.dataset.month));
+    });
+
+    // Tooltip
+    col.addEventListener('mousemove', (e) => {
+      const mes = Number(col.dataset.month);
+      const dados = projecao[mes];
+      let tooltipEl = document.getElementById('chart-tooltip');
+      if (!tooltipEl) {
+        tooltipEl = document.createElement('div');
+        tooltipEl.id = 'chart-tooltip';
+        tooltipEl.className = 'chart-tooltip';
+        document.body.appendChild(tooltipEl);
+      }
+      if (dados.total === 0) {
+        tooltipEl.style.display = 'none';
+        return;
+      }
+      tooltipEl.innerHTML = `
+        <div style="font-weight:700;margin-bottom:6px;color:#fff;border-bottom:1px solid #2d3d4f;padding-bottom:4px;">💳 ${MONTHS[mes - 1]}</div>
+        <div>Total parcelado: <span style="color:#38ef7d;font-weight:700;">${formatarMoeda(dados.total)}</span></div>
+        <div style="color:#7fa8c8;font-size:0.72rem;margin-top:4px;">${dados.itens.length} compra(s) parcelada(s)</div>
+      `;
+      tooltipEl.style.display = 'block';
+      tooltipEl.style.visibility = 'hidden';
+      const h = tooltipEl.offsetHeight;
+      const w = tooltipEl.offsetWidth;
+      tooltipEl.style.visibility = '';
+      tooltipEl.style.left = (e.clientX - w / 2) + 'px';
+      tooltipEl.style.top = (e.clientY - h - 8) + 'px';
+    });
+    col.addEventListener('mouseleave', () => {
+      const t = document.getElementById('chart-tooltip');
+      if (t) t.style.display = 'none';
+    });
+  });
+}
+
+// GRÁFICO DE CATEGORIAS
+const CATEGORIA_CORES = [
+  '#38ef7d', '#3a7bd5', '#f7971e', '#eb3349', '#a855f7',
+  '#06b6d4', '#f43f5e', '#eab308', '#10b981', '#8b5cf6',
+  '#ec4899', '#14b8a6',
+];
+
+function atualizarChartCategorias() {
+  const wrapper = document.getElementById('categoria-chart-wrapper');
+  if (!wrapper) return;
+
+  const despesasFiltradas = filtrarPorMes(state.despesas);
+
+  const categorias = {};
+  despesasFiltradas.forEach(function(d) {
+    var cat = (d.tipo || '').trim() || 'Sem categoria';
+    categorias[cat] = (categorias[cat] || 0) + (Number(d.valor) || 0);
+  });
+
+  var entries = [];
+  Object.keys(categorias).forEach(function(k) {
+    if (categorias[k] > 0) entries.push([k, categorias[k]]);
+  });
+  entries.sort(function(a, b) { return b[1] - a[1]; });
+
+  if (entries.length === 0) {
+    wrapper.innerHTML = '<div class="categoria-empty">Nenhuma despesa no período</div>';
+    return;
+  }
+
+  var total = 0;
+  entries.forEach(function(e) { total += e[1]; });
+  var maxVal = entries[0][1];
+
+  wrapper.innerHTML = '';
+
+  entries.forEach(function(e, i) {
+    var cor = CATEGORIA_CORES[i % CATEGORIA_CORES.length];
+    var pct = ((e[1] / total) * 100).toFixed(1);
+    var largura = ((e[1] / maxVal) * 100).toFixed(1);
+
+    var isActive = state.categoriaSelecionada === e[0];
+    var opacity = state.categoriaSelecionada && !isActive ? '0.35' : '1';
+
+    var row = document.createElement('div');
+    row.style.cssText = 'display:grid;grid-template-columns:120px 1fr 160px;align-items:center;gap:12px;margin-bottom:8px;cursor:pointer;opacity:' + opacity + ';transition:opacity 0.2s;';
+
+    var label = document.createElement('div');
+    label.style.cssText = 'font-size:0.8rem;color:' + (isActive ? '#fff' : '#c8d8e8') + ';text-align:right;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:' + (isActive ? '700' : '400') + ';';
+    label.textContent = e[0];
+
+    var barWrap = document.createElement('div');
+    barWrap.style.cssText = 'background:#0d1e2e;border-radius:4px;height:20px;overflow:hidden;outline:' + (isActive ? '2px solid ' + cor : 'none') + ';';
+
+    var bar = document.createElement('div');
+    bar.style.cssText = 'height:100%;border-radius:4px;background:' + cor + ';width:' + largura + '%;transition:width 0.4s ease;';
+
+    var info = document.createElement('div');
+    info.style.cssText = 'font-size:0.76rem;white-space:nowrap;';
+    info.innerHTML = '<span style="color:#7fa8c8;">' + pct + '%</span>&nbsp;&nbsp;<span style="color:' + cor + ';font-weight:700;">' + formatarMoeda(e[1]) + '</span>';
+
+    barWrap.appendChild(bar);
+    row.appendChild(label);
+    row.appendChild(barWrap);
+    row.appendChild(info);
+    wrapper.appendChild(row);
+
+    // Clique para filtrar
+    row.addEventListener('click', function() {
+      state.categoriaSelecionada = isActive ? null : e[0];
+      atualizarFiltroChip();
+      atualizarPainel();
+    });
+
+    // Tooltip
+    row.addEventListener('mousemove', function(ev) {
+      var tooltipEl = document.getElementById('chart-tooltip');
+      if (!tooltipEl) {
+        tooltipEl = document.createElement('div');
+        tooltipEl.id = 'chart-tooltip';
+        tooltipEl.className = 'chart-tooltip';
+        document.body.appendChild(tooltipEl);
+      }
+      tooltipEl.innerHTML = '<div style="font-weight:700;margin-bottom:6px;color:#fff;border-bottom:1px solid #2d3d4f;padding-bottom:4px;">' + escapeHtml(e[0]) + '</div>'
+        + '<div>💸 Valor: <span style="color:#ff6b6b;font-weight:600;">' + formatarMoeda(e[1]) + '</span></div>'
+        + '<div>📊 Participação: <span style="color:#38ef7d;font-weight:600;">' + pct + '%</span></div>';
+      tooltipEl.style.display = 'block';
+      tooltipEl.style.visibility = 'hidden';
+      var h = tooltipEl.offsetHeight;
+      var w = tooltipEl.offsetWidth;
+      tooltipEl.style.visibility = '';
+      tooltipEl.style.left = (ev.clientX - w / 2) + 'px';
+      tooltipEl.style.top = (ev.clientY - h - 8) + 'px';
+    });
+    row.addEventListener('mouseleave', function() {
+      var t = document.getElementById('chart-tooltip');
+      if (t) t.style.display = 'none';
+    });
+  });
+}
+
 // STATUS
 function mostrarStatus(mensagem, tipo = 'info') {
   statusMessageEl.textContent = mensagem;
@@ -805,9 +1122,14 @@ function formatarMoeda(valor) {
 function formatarData(dataStr) {
   if (!dataStr) return '-';
   try {
-    const parts = dataStr.split('-');
-    if (parts.length === 3) {
-      return `${parts[2]}/${parts[1]}/${parts[0]}`;
+    // yyyy-mm-dd
+    const iso = dataStr.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (iso) return `${iso[3]}/${iso[2]}/${iso[1]}`;
+    // dd/mm/yyyy ou dd/mm/yy
+    const brl = dataStr.match(/^(\d{2})\/(\d{2})\/(\d{2,4})$/);
+    if (brl) {
+      const ano = brl[3].length === 2 ? '20' + brl[3] : brl[3];
+      return `${brl[1]}/${brl[2]}/${ano}`;
     }
     return dataStr;
   } catch {

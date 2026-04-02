@@ -504,15 +504,28 @@ function renderizarTabelas() {
       .join('');
   }
 
-  // Parcelamentos — filtra por mês E por forma de pagamento parcelada
-  const parcelamentosFiltrados = filtrarPorCategoria(filtrarPorMes(state.despesas)).filter((d) => {
-    const forma = (d.formaPgto || '').trim().toUpperCase();
-    return isCreditoParcelado(d);
+  // Parcelamentos — usa a mesma projeção do gráfico
+  const mesSel = state.mesSelecionado;
+  const parcelamentosDoMes = [];
+
+  if (mesSel) {
+    const [anoSel, mesMNum] = mesSel.split('-').map(Number);
+    const projecaoParc = montarProjecaoParcelados(anoSel);
+    const itensDoMes = projecaoParc[mesMNum] ? projecaoParc[mesMNum].itens : [];
+    itensDoMes.forEach((it) => {
+      parcelamentosDoMes.push({ d: { nomeDespesa: it.nome, valor: it.valor, tipo: it.tipo, vencimento: '' }, numeroParcela: it.parcela, totalParcelas: it.total });
+    });
+  }
+
+  // Aplica filtro de categoria se ativo
+  const parcelamentosFiltrados = parcelamentosDoMes.filter(({ d }) => {
+    if (!state.categoriaSelecionada) return true;
+    return ((d.tipo || '').trim() || 'Sem categoria') === state.categoriaSelecionada;
   });
 
-  // Monta mapa de cores por tipo (igual despesas)
+  // Mapa de cores por tipo
   const totaisParc = {};
-  parcelamentosFiltrados.forEach((d) => {
+  parcelamentosFiltrados.forEach(({ d }) => {
     const cat = (d.tipo || '').trim() || 'Sem categoria';
     totaisParc[cat] = (totaisParc[cat] || 0) + (Number(d.valor) || 0);
   });
@@ -523,15 +536,15 @@ function renderizarTabelas() {
   if (parcelamentosFiltrados.length === 0) {
     tbodyParcelamentosEl.innerHTML = '<tr><td colspan="5" style="text-align:center;color:#999;">Nenhum parcelamento no período</td></tr>';
   } else {
-    tbodyParcelamentosEl.innerHTML = parcelamentosFiltrados.map((d) => {
+    tbodyParcelamentosEl.innerHTML = parcelamentosFiltrados.map(({ d, numeroParcela, totalParcelas }) => {
       const cat = (d.tipo || '').trim() || 'Sem categoria';
       const cor = corParc[cat] || '#c8d8e8';
       return `<tr>
         <td>${escapeHtml(d.nomeDespesa || d.nome || '')}</td>
         <td>${formatarData(d.vencimento || d.data || '')}</td>
         <td>${formatarMoeda(d.valor)}</td>
-        <td style="text-align:center;color:#7fa8c8;">${escapeHtml(d.parcelas || '-')}</td>
-        <td class="td-tipo" style="color:${cor};font-weight:600;font-size:0.78rem;text-transform:uppercase;">${escapeHtml(cat === 'Sem categoria' ? (d.tipo || '') : cat)}</td>
+        <td style="text-align:center;color:#7fa8c8;">${numeroParcela}/${totalParcelas}</td>
+        <td class="td-tipo" style="color:${cor};font-weight:600;font-size:0.78rem;text-transform:uppercase;">${escapeHtml(cat)}</td>
       </tr>`;
     }).join('');
   }
@@ -640,9 +653,8 @@ async function importarGoogleSheets(silencioso = false) {
     }
 
     console.log('[importarGoogleSheets] Dados finais - Despesas:', despesas.length, 'Receitas:', receitas.length);
-    // Loga a primeira despesa com CRÉDITO PARCELADO para debug
-    const exemploParc = despesas.find((d) => isCreditoParcelado(d));
-    console.log('[DEBUG] Exemplo CRÉDITO PARCELADO:', JSON.stringify(exemploParc));
+    console.log('[importarGoogleSheets] Primeira despesa:', despesas[0]);
+    console.log('[importarGoogleSheets] Primeira receita:', receitas[0]);
 
     state.despesas = despesas;
     state.receitas = receitas;
@@ -866,46 +878,25 @@ function iniciarAutoRefreshSePossivel() {
 }
 
 
-// GRÁFICO DE PARCELADOS
-function atualizarChartParcelados() {
-  const wrapper = document.getElementById('parcelados-chart-wrapper');
-  if (!wrapper) return;
-
-  const ano = yearSelect ? Number(yearSelect.value) : new Date().getFullYear();
-
-  const parcelados = state.despesas.filter((d) => {
-    const forma = (d.formaPgto || '').trim().toUpperCase();
-    return isCreditoParcelado(d);
-  });
-
-  if (parcelados.length === 0) {
-    wrapper.innerHTML = '<div style="color:#6b8299;font-size:0.85rem;padding:12px 0;">Nenhuma compra parcelada encontrada.</div>';
-    return;
-  }
-
-  // Projeta parcelas em meses
+// Monta projeção de parcelados a partir dos registros de parcela 1/X
+function montarProjecaoParcelados(ano) {
   const projecao = {};
   for (let m = 1; m <= 12; m++) {
     projecao[m] = { total: 0, itens: [] };
   }
 
-  parcelados.forEach((d) => {
-    const parcelaStr = (d.parcelas || '').trim();
-    const match = parcelaStr.match(/^(\d+)\/(\d+)$/);
-    if (!match) return;
+  // Olha APENAS os registros que são a parcela 1 (1/X)
+  state.despesas.filter(isCreditoParcelado).forEach((d) => {
+    const match = (d.parcelas || '').trim().match(/^1\/(\d+)$/);
+    if (!match) return; // ignora se não for 1/X
 
-    const parcelaAtual = parseInt(match[1], 10);
-    const totalParcelas = parseInt(match[2], 10);
-    if (!parcelaAtual || !totalParcelas) return;
-
+    const totalParcelas = parseInt(match[1], 10);
     const parsed = extractMonthFrom(d.mesReferencia || '');
     if (!parsed) return;
 
-    // Mês base = mês da parcela 1
-    const baseDate = new Date(parsed.year, parsed.month - 1 - (parcelaAtual - 1), 1);
-
+    // parcela 1 cai no mesReferencia, projeta as demais para frente
     for (let i = 0; i < totalParcelas; i++) {
-      const mp = new Date(baseDate.getFullYear(), baseDate.getMonth() + i, 1);
+      const mp = new Date(parsed.year, parsed.month - 1 + i, 1);
       if (mp.getFullYear() !== ano) continue;
       const mes = mp.getMonth() + 1;
       projecao[mes].total += Number(d.valor) || 0;
@@ -914,9 +905,27 @@ function atualizarChartParcelados() {
         valor: Number(d.valor) || 0,
         parcela: i + 1,
         total: totalParcelas,
+        tipo: d.tipo || '',
       });
     }
   });
+
+  return projecao;
+}
+
+// GRÁFICO DE PARCELADOS
+function atualizarChartParcelados() {
+  const wrapper = document.getElementById('parcelados-chart-wrapper');
+  if (!wrapper) return;
+
+  const ano = yearSelect ? Number(yearSelect.value) : new Date().getFullYear();
+  const projecao = montarProjecaoParcelados(ano);
+
+  const temDados = Object.values(projecao).some((v) => v.total > 0);
+  if (!temDados) {
+    wrapper.innerHTML = '<div style="color:#6b8299;font-size:0.85rem;padding:12px 0;">Nenhuma compra parcelada encontrada para este ano.</div>';
+    return;
+  }
 
   const maxTotal = Math.max(...Object.values(projecao).map((v) => v.total), 1);
   const mesSelecionado = state.mesSelecionado ? Number(state.mesSelecionado.split('-')[1]) : null;

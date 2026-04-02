@@ -552,13 +552,33 @@ body {
 
 /* RESPONSIVE */
 @media (max-width: 768px) {
+  body {
+    padding: 10px;
+  }
+
+  .header {
+    padding: 24px 16px;
+  }
+
   .header h1 {
     font-size: 1.8rem;
+  }
+
+  .header .subtitle {
+    font-size: 0.95rem;
   }
 
   .filter-section {
     flex-direction: column;
     align-items: stretch;
+    padding: 14px 16px;
+    gap: 8px;
+  }
+
+  .month-buttons {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: 4px;
   }
 
   .month-input,
@@ -566,26 +586,126 @@ body {
     width: 100%;
   }
 
+  /* Cards em coluna única */
   .cards-section {
     grid-template-columns: 1fr;
+    padding: 16px;
+    gap: 12px;
+  }
+
+  .card {
+    min-height: 130px;
+    padding: 18px 20px;
   }
 
   .card-value {
     font-size: 2rem;
   }
 
+  /* Gráfico mensal com scroll horizontal */
+  .chart-section {
+    padding: 16px;
+  }
+
+  .chart-wrapper-scroll {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .chart-wrapper {
+    min-width: 480px;
+  }
+
+  /* Categoria chart: label menor */
+  .catbar-row {
+    grid-template-columns: 90px 1fr auto;
+    gap: 8px;
+  }
+
+  .catbar-label {
+    font-size: 0.72rem;
+  }
+
+  .catbar-info {
+    font-size: 0.7rem;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  /* Tabs com scroll horizontal */
   .tabs {
-    padding: 0 20px;
+    padding: 0 12px;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    flex-wrap: nowrap;
+    white-space: nowrap;
   }
 
   .tab-btn {
-    padding: 12px 20px;
-    font-size: 0.9rem;
+    padding: 12px 16px;
+    font-size: 0.85rem;
+    flex-shrink: 0;
+  }
+
+  /* Tabelas com scroll horizontal */
+  .tab-content {
+    padding: 16px;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .data-table {
+    min-width: 460px;
   }
 
   .data-table th,
   .data-table td {
-    padding: 10px;
-    font-size: 0.9rem;
+    padding: 9px 10px;
+    font-size: 0.82rem;
+  }
+
+  .data-section {
+    padding: 0;
+  }
+
+  /* Gráfico parcelados */
+  #parcelados-chart-wrapper {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+}
+
+@media (max-width: 480px) {
+  .header h1 {
+    font-size: 1.4rem;
+  }
+
+  .card-value {
+    font-size: 1.65rem;
+  }
+
+  .card-label {
+    font-size: 0.85rem;
+  }
+
+  .card-info {
+    font-size: 0.78rem;
+  }
+
+  .catbar-row {
+    grid-template-columns: 70px 1fr auto;
+  }
+
+  .catbar-label {
+    font-size: 0.68rem;
+  }
+
+  .chart-label {
+    font-size: 0.62rem;
+  }
+
+  .tab-btn {
+    padding: 10px 12px;
+    font-size: 0.8rem;
   }
 }

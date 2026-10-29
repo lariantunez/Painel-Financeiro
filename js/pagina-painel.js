@@ -4,10 +4,12 @@ import { moeda, pct, nomeMes, somarMeses, MESES, escapeHtml, rotulo, parseData, 
 import { totaisMes, serieMeses, porTipo, fixoVariavel, contasAPagar, parcelamentos, maioresGastos, qualidade, tipoDe } from './analise.js';
 import { graficoColunas, responsivo, legenda, linhaTooltip, mostrarTooltip, esconderTooltip, toast, $, $$ } from './ui.js';
 import { backendConfigurado, enviar } from './api.js';
+import { valoresUsados } from './model.js';
 
 const COR_R = 'var(--receita)';
 const COR_D = 'var(--despesa)';
 let abaTabela = 'despesas';
+let classificandoSemTipo = false;
 let busca = '';
 
 export function renderPainel(raiz, app) {
@@ -22,8 +24,10 @@ export function renderPainel(raiz, app) {
   const problemas = qualidade(dados);
   const aPagar = contasAPagar(dados, mes);
 
+  const semTipo = problemas.find((p) => p.semTipo)?.semTipo || [];
   raiz.innerHTML = `
     ${avisos(app, problemas)}
+    ${classificandoSemTipo && semTipo.length ? painelSemTipo(semTipo, dados) : ''}
     <div class="cabecalho-pagina">
       <div class="seletor-mes">
         <button class="btn btn-ghost btn-icone" data-mes="-1" aria-label="Mês anterior">‹</button>
@@ -86,6 +90,8 @@ export function renderPainel(raiz, app) {
     </section>
   `;
 
+  ligarSemTipo(raiz, semTipo, app);
+
   // Navegação
   for (const b of $$('[data-mes]', raiz)) {
     b.addEventListener('click', () => app.irParaMes(b.dataset.mes === 'hoje' ? mesAtual() : somarMeses(mes, +b.dataset.mes)));
@@ -143,9 +149,61 @@ function avisos(app, problemas) {
   for (const p of problemas) {
     const ex = p.exemplo ? ` — ex.: linha ${p.exemplo._linha} (“${escapeHtml(p.exemplo.tipo || p.exemplo.nome)}”)` : '';
     const linhas = p.linhas.length > 8 ? `${p.linhas.slice(0, 8).join(', ')}…` : p.linhas.join(', ');
-    html += `<div class="aviso"><div><b>${escapeHtml(p.texto)}</b> na aba ${p.aba}${ex}. ${p.impacto}<br><span class="small text-2">Linhas: ${linhas}</span></div></div>`;
+    const acao = p.semTipo && backendConfigurado() && !classificandoSemTipo ? '<div class="acoes"><button class="btn btn-sm" id="btn-sem-tipo">Classificar agora</button></div>' : '';
+    html += `<div class="aviso"><div><b>${escapeHtml(p.texto)}</b> na aba ${p.aba}${ex}. ${p.impacto}<br><span class="small text-2">Linhas: ${linhas}</span></div>${acao}</div>`;
   }
   return html;
+}
+
+// Classificar despesas sem TIPO direto pelo painel
+function painelSemTipo(lista, dados) {
+  const tipos = valoresUsados(dados.despesas, 'tipo').sort((a, b) => a.localeCompare(b, 'pt-BR'));
+  return `<div class="card" style="margin-bottom:16px">
+    <div class="card-titulo"><h2>Classificar despesas sem tipo</h2><span class="sub">A alteração vai direto para a planilha</span></div>
+    <div class="tabela-wrap"><table class="tabela"><thead><tr><th>Data</th><th>Descrição</th><th class="opc">Forma</th><th class="num">Valor</th><th>Tipo</th></tr></thead><tbody>
+    ${lista
+      .map(
+        (d, i) => `<tr><td class="tab">${escapeHtml(d.vencimento)}</td><td>${escapeHtml(d.nome)}<span class="desc-original">linha ${d._linha} · ${nomeMes(d.mesRef, false)}</span></td>
+        <td class="text-2 opc">${escapeHtml(d.forma)}</td><td class="num">${moeda(d.valor)}</td>
+        <td><select class="select select-sm" data-sem-tipo="${i}" aria-label="Tipo de ${escapeHtml(d.nome)}"><option value="">Escolha…</option>${tipos.map((t) => `<option>${escapeHtml(t)}</option>`).join('')}</select></td></tr>`
+      )
+      .join('')}
+    </tbody></table></div>
+    <div class="rodape-acoes" style="justify-content:flex-end"><button class="btn" id="cancelar-sem-tipo">Cancelar</button><button class="btn btn-primario" id="salvar-sem-tipo">Salvar</button></div>
+  </div>`;
+}
+
+function ligarSemTipo(raiz, lista, app) {
+  $('#btn-sem-tipo', raiz)?.addEventListener('click', () => {
+    classificandoSemTipo = true;
+    app.renderizar();
+  });
+  $('#cancelar-sem-tipo', raiz)?.addEventListener('click', () => {
+    classificandoSemTipo = false;
+    app.renderizar();
+  });
+  $('#salvar-sem-tipo', raiz)?.addEventListener('click', async (e) => {
+    const escolhas = $$('[data-sem-tipo]', raiz)
+      .filter((s) => s.value)
+      .map((s) => ({ d: lista[+s.dataset.semTipo], tipo: s.value }));
+    if (!escolhas.length) {
+      toast('Escolha o tipo de pelo menos uma despesa', 'erro');
+      return;
+    }
+    e.target.disabled = true;
+    e.target.textContent = 'Salvando…';
+    try {
+      const r = await enviar('status', { alteracoes: escolhas.map(({ d, tipo }) => ({ aba: 'despesas', linha: d._linha, nome: d.nome, campos: { TIPO: tipo } })) });
+      if (r.erros?.length) toast(r.erros[0], 'erro', 6000);
+      if (r.alteradas) toast(`${r.alteradas} despesa(s) classificada(s)`);
+      classificandoSemTipo = false;
+      await app.recarregar();
+    } catch (err) {
+      toast(err.message, 'erro', 6000);
+      e.target.disabled = false;
+      e.target.textContent = 'Salvar';
+    }
+  });
 }
 
 function delta(atual, anterior, subirEhBom) {

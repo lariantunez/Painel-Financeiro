@@ -137,7 +137,7 @@ export function qualidade(dados) {
   if (ruimR.length) problemas.push({ texto: `${ruimR.length} receita(s) com mês de referência inválido`, linhas: ruimR.map((l) => l._linha), aba: 'Receitas', exemplo: ruimR[0], impacto: 'Esses lançamentos não aparecem nos totais.' });
   if (ruimD.length) problemas.push({ texto: `${ruimD.length} despesa(s) com mês de referência inválido`, linhas: ruimD.map((l) => l._linha), aba: 'Despesas', exemplo: ruimD[0], impacto: 'Esses lançamentos não aparecem nos totais.' });
   const semTipo = dados.despesas.filter((d) => !d.tipo);
-  if (semTipo.length) problemas.push({ texto: `${semTipo.length} despesa(s) sem TIPO`, linhas: semTipo.map((l) => l._linha), aba: 'Despesas', impacto: 'Eles aparecem como “Sem tipo” nos gráficos.' });
+  if (semTipo.length) problemas.push({ texto: `${semTipo.length} despesa(s) sem TIPO`, linhas: semTipo.map((l) => l._linha), aba: 'Despesas', impacto: 'Eles aparecem como “Sem tipo” nos gráficos.', semTipo });
   return problemas;
 }
 

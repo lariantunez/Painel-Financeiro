@@ -42,9 +42,19 @@ function rotaAtual() {
 }
 
 function renderizar() {
+  const rotaAnterior = estado.rota;
   estado.rota = rotaAtual();
   for (const a of $$('.nav a')) a.classList.toggle('ativo', a.dataset.rota === estado.rota);
-  PAGINAS[estado.rota]($('#app'), app);
+  // Na mesma página, redesenhar não pode mexer na rolagem (ex.: ao marcar uma conta como paga)
+  const raiz = $('#app');
+  const mesmaPagina = rotaAnterior === estado.rota;
+  const y = window.scrollY;
+  if (mesmaPagina) raiz.style.minHeight = `${raiz.offsetHeight}px`;
+  PAGINAS[estado.rota](raiz, app);
+  if (mesmaPagina) {
+    raiz.style.minHeight = '';
+    window.scrollTo({ top: y, behavior: 'instant' });
+  }
   atualizarSync();
 }
 

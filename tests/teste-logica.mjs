@@ -8,7 +8,7 @@ import { criarClassificador, chaveDescricao, paraLinhasPlanilha, regrasAPartirDe
 import { normalizarDespesa, normalizarReceita } from '../js/model.js';
 import { montarFixas, fixasParaLinhas } from '../js/fixas.js';
 import { parseValor, parseMesRef } from '../js/util.js';
-import { parcelasDaMesmaCompra, nomeDaParcela } from '../js/analise.js';
+import { parcelasDaMesmaCompra, nomeDaParcela, mesmaDespesa, lancamentosSeguintes, inferirRecorrencia } from '../js/analise.js';
 
 let ok = 0;
 const teste = (nome, fn) => {
@@ -185,6 +185,31 @@ if (pasta) {
     assert.equal(nomeDaParcela('Monitores LG', serie.find((d) => d.nome === 'Monitores')), 'Monitores LG - Parcela 1/10');
     const moto = despesas.find((d) => d.nome === 'Moto' && d.parcelas === '8/48');
     assert.equal(nomeDaParcela('Moto Honda', moto), 'Moto Honda');
+  });
+  teste('Classificação propaga para a mesma despesa; valor só para as seguintes', () => {
+    const cond = despesas.find((d) => d.nome === 'Condomínio' && d.mesRef === '2026-08');
+    const todos = mesmaDespesa(despesas, cond);
+    assert.ok(todos.length >= 20 && todos.every((d) => d.nome === 'Condomínio'), `${todos.length}`);
+    assert.deepEqual(lancamentosSeguintes(despesas, cond).map((d) => d.mesRef).sort(), ['2026-08', '2026-09']);
+    // financiamento numerado (22/63) segue pelo nome, mesmo com valores diferentes ao longo do tempo
+    const fin = despesas.find((d) => d.nome === 'Financiamento Carro' && d.mesRef === '2026-08');
+    assert.ok(mesmaDespesa(despesas, fin).length >= 20);
+    // marketplace com nome genérico: só ele mesmo
+    const shopee = despesas.find((d) => d.nome === 'shopee');
+    assert.deepEqual(mesmaDespesa(despesas, shopee), [shopee]);
+    // compra parcelada no cartão: só as parcelas da compra
+    const amazon = despesas.find((d) => d.nome === 'Amazon Monitores - Parcela 8/10');
+    assert.equal(mesmaDespesa(despesas, amazon).length, 8);
+    assert.deepEqual(lancamentosSeguintes(despesas, amazon), [amazon]);
+  });
+  teste('Recorrência inferida: contas mensais x gastos eventuais', () => {
+    const r = inferirRecorrencia(despesas);
+    const de = (nome) => r.get(despesas.find((d) => d.nome === nome));
+    assert.equal(de('Condomínio'), 'MENSAL');
+    assert.equal(de('Luz'), 'MENSAL');
+    assert.equal(de('Financiamento Apartamento'), 'MENSAL');
+    assert.equal(de('Feira'), 'EVENTUAL'); // muitos meses, mas várias vezes por mês
+    assert.equal(de('Amazon Monitores - Parcela 8/10'), 'EVENTUAL'); // parcela de compra no cartão
   });
   teste('Parcela seguinte com mesmo valor não é duplicata', () => {
     const l = criarClassificador({ despesas, receitas }).classificarExtrato(lerExtrato('date,title,amount\n2026-09-07,LIVELO - NuPay - Parcela 2/10,"299,48"', 'f.csv'))[0];

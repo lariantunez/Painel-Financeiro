@@ -99,10 +99,11 @@ function indexarHistorico(despesas, receitas) {
   const add = (chave, destino, r) => {
     if (!chave) return;
     let e = porChave.get(chave);
-    if (!e) porChave.set(chave, (e = { chave, destino, tipos: {}, categorias: {}, nome: '', n: 0, tok: tokens(chave), mesRef: '' }));
+    if (!e) porChave.set(chave, (e = { chave, destino, tipos: {}, categorias: {}, recorrencias: {}, nome: '', n: 0, tok: tokens(chave), mesRef: '' }));
     e.n++;
     e.tipos[r.tipo] = (e.tipos[r.tipo] || 0) + 1;
     e.categorias[r.categoria] = (e.categorias[r.categoria] || 0) + 1;
+    if (r.recorrencia) e.recorrencias[r.recorrencia] = (e.recorrencias[r.recorrencia] || 0) + 1;
     if (!e.mesRef || r.mesRef >= e.mesRef) {
       e.mesRef = r.mesRef;
       e.nome = destino === 'DESPESA' ? r.nome.replace(RX_PARCELA, '').trim() : r.tipo;
@@ -193,6 +194,7 @@ export function criarClassificador({ regras = [], despesas = [], receitas = [], 
       nome: nomeSugerido(tx.descricao),
       tipo: '',
       categoria: 'VARIÁVEL',
+      recorrencia: 'EVENTUAL',
       status: 'PAGO',
       forma: '',
       parcelas: '1/1',
@@ -237,6 +239,7 @@ export function criarClassificador({ regras = [], despesas = [], receitas = [], 
           nome: RX_PARCELA.test(anterior.nome) ? anterior.nome.replace(/Parcela\s+\d+\s*\/\s*\d+/i, sufixo) : `${anterior.nome.trim()} - ${sufixo}`,
           tipo: anterior.tipo,
           categoria: anterior.categoria || 'VARIÁVEL',
+          recorrencia: anterior.recorrencia || 'EVENTUAL',
           confianca: 'certo',
           motivo: `Continuação de "${anterior.nome}"`,
           lembrar: false,
@@ -258,6 +261,7 @@ export function criarClassificador({ regras = [], despesas = [], receitas = [], 
         destino: estorno ? 'DESPESA' : fonte.destino || lanc.destino,
         tipo: fonte.tipo || '',
         categoria: fonte.categoria || lanc.categoria,
+        recorrencia: fonte.recorrencia || lanc.recorrencia,
         confianca,
         motivo,
       });
@@ -282,7 +286,7 @@ export function criarClassificador({ regras = [], despesas = [], receitas = [], 
     if (hist && hist.destino === lanc.destino) {
       const tipo = dominante(hist.tipos);
       const cat = dominante(hist.categorias);
-      const fonte = { destino: hist.destino, nome: hist.nome, tipo: tipo.valor, categoria: cat.valor };
+      const fonte = { destino: hist.destino, nome: hist.nome, tipo: tipo.valor, categoria: cat.valor, recorrencia: dominante(hist.recorrencias).valor };
       if (hist.n >= 2 && tipo.share >= 0.85) return aplicar(fonte, 'certo', `Igual a ${hist.n} lançamentos anteriores`);
       return aplicar(fonte, 'sugestao', `Parecido com "${hist.nome}" (${hist.n}x no histórico)`);
     }
@@ -298,7 +302,7 @@ export function criarClassificador({ regras = [], despesas = [], receitas = [], 
       if (h.destino !== lanc.destino) continue;
       const s = similaridade(tok, h.tok);
       if (s >= 0.6 && (!melhor || s > melhor.s + 0.05)) {
-        melhor = { s, fonte: { destino: h.destino, nome: h.nome, tipo: dominante(h.tipos).valor, categoria: dominante(h.categorias).valor }, rotulo: h.nome };
+        melhor = { s, fonte: { destino: h.destino, nome: h.nome, tipo: dominante(h.tipos).valor, categoria: dominante(h.categorias).valor, recorrencia: dominante(h.recorrencias).valor }, rotulo: h.nome };
       }
     }
     if (melhor) {
@@ -355,6 +359,7 @@ export function propagarDecisao(lancamentos, modelo) {
     l.destino = modelo.destino;
     l.tipo = modelo.tipo;
     l.categoria = modelo.categoria;
+    l.recorrencia = modelo.recorrencia;
     if (modelo.destino === 'RECEITA') l.titular = modelo.titular;
     const sufixo = l.nome.match(RX_PARCELA);
     l.nome = modelo.nome.replace(RX_PARCELA, '') + (sufixo ? ` - Parcela ${sufixo[1]}/${sufixo[2]}` : '');
@@ -379,6 +384,7 @@ export function regrasAPartirDe(lancamentos) {
       nome: marketplace ? '' : nome, // o nome dado a uma compra de marketplace vale só para ela
       tipo: l.destino === 'IGNORAR' ? '' : l.tipo,
       categoria: l.destino === 'IGNORAR' ? '' : l.categoria,
+      recorrencia: l.destino === 'DESPESA' ? l.recorrencia : '',
       titular: l.destino === 'RECEITA' ? l.titular : '',
       // Se uma regra já usada várias vezes foi contrariada, o lançamento é ambíguo: passa a perguntar sempre.
       perguntar: marketplace || (l.perguntar !== undefined && l.editado ? l.perguntar : anterior ? anterior.perguntar || (mudou && anterior.usos >= 2) : false),
@@ -400,6 +406,7 @@ export function paraLinhasPlanilha(lancamentos) {
         VENCIMENTO: l.vencimento,
         VALOR: l.valor,
         CATEGORIA: l.categoria,
+        RECORRENCIA: l.recorrencia || 'EVENTUAL',
         STATUS: l.status,
         FORMA_DE_PGTO: l.forma,
         PARCELAS: l.parcelas,

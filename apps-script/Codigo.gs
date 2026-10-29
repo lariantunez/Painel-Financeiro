@@ -15,7 +15,10 @@
 
 const ABAS = { DESPESAS: 'Despesas', RECEITAS: 'Receitas', REGRAS: 'Regras', IMPORTACOES: 'Importacoes' };
 const COLUNAS_EXTRAS = ['ID_IMPORTACAO', 'DESCRICAO_ORIGINAL'];
-const CAB_REGRAS = ['CHAVE', 'DESTINO', 'NOME', 'TIPO', 'CATEGORIA', 'TITULAR', 'PERGUNTAR', 'USOS', 'ATUALIZADO'];
+// RECORRENCIA: MENSAL (conta paga todo mês) ou EVENTUAL (gasto que acontece ao longo do mês)
+const COLUNAS_EXTRAS_DESPESAS = COLUNAS_EXTRAS.concat(['RECORRENCIA']);
+const RECORRENCIAS = ['MENSAL', 'EVENTUAL'];
+const CAB_REGRAS = ['CHAVE', 'DESTINO', 'NOME', 'TIPO', 'CATEGORIA', 'RECORRENCIA', 'TITULAR', 'PERGUNTAR', 'USOS', 'ATUALIZADO'];
 const CAB_IMPORTACOES = ['LOTE', 'DATA', 'DESPESAS', 'RECEITAS', 'DESCRICAO', 'IDS', 'DESFEITO'];
 const COLUNAS_DATA = ['VENCIMENTO'];
 const COLUNAS_MES = ['MES_DE_REFERENCIA', 'DATA'];
@@ -36,10 +39,17 @@ function configurar() {
 
 function prepararAbas_() {
   const ss = SpreadsheetApp.getActive();
-  garantirColunas_(ss.getSheetByName(ABAS.DESPESAS), COLUNAS_EXTRAS);
+  const despesas = ss.getSheetByName(ABAS.DESPESAS);
+  const cab = garantirColunas_(despesas, COLUNAS_EXTRAS_DESPESAS);
   garantirColunas_(ss.getSheetByName(ABAS.RECEITAS), COLUNAS_EXTRAS);
-  abaComCabecalho_(ABAS.REGRAS, CAB_REGRAS);
+  garantirColunas_(abaComCabecalho_(ABAS.REGRAS, CAB_REGRAS), ['RECORRENCIA']);
   abaComCabecalho_(ABAS.IMPORTACOES, CAB_IMPORTACOES);
+  // lista suspensa da coluna RECORRENCIA (criada uma vez)
+  const j = cab.indexOf('RECORRENCIA') + 1;
+  if (!despesas.getRange(2, j).getDataValidation()) {
+    const regra = SpreadsheetApp.newDataValidation().requireValueInList(RECORRENCIAS, true).setAllowInvalid(false).build();
+    despesas.getRange(2, j, despesas.getMaxRows() - 1, 1).setDataValidation(regra);
+  }
 }
 
 // ───────────────────────── HTTP ─────────────────────────
@@ -68,6 +78,7 @@ function doPost(e) {
         case 'status': return atualizarStatus_(corpo.alteracoes || []);
         case 'desfazer': return desfazer_(corpo.lote);
         case 'renomearOpcao': return renomearOpcao_(corpo.aba, corpo.coluna, corpo.de, corpo.para);
+        case 'preencherColuna': return preencherColuna_(corpo.aba, corpo.coluna, corpo.valores || []);
         default: throw new Error('Ação desconhecida: ' + corpo.acao);
       }
     } finally {
@@ -145,7 +156,7 @@ function lancar_(corpo) {
 
 function anexar_(aba, linhas) {
   if (!linhas.length) return { ids: [], duplicadas: 0 };
-  const cab = garantirColunas_(aba, COLUNAS_EXTRAS);
+  const cab = garantirColunas_(aba, aba.getName() === ABAS.DESPESAS ? COLUNAS_EXTRAS_DESPESAS : COLUNAS_EXTRAS);
   const iId = cab.indexOf('ID_IMPORTACAO');
   const ultima = ultimaLinhaComDados_(aba);
   const existentes = new Set(ultima > 1 ? aba.getRange(2, iId + 1, ultima - 1, 1).getValues().map((x) => String(x[0])) : []);
@@ -226,41 +237,79 @@ function salvarRegras_(regras, excluir) {
   return { regras: regras.length, excluidas: apagar.length };
 }
 
+// Altera campos de linhas existentes. Cada linha só é alterada se o nome ainda for o esperado
+// (proteção contra a planilha ter mudado desde que o painel leu). Lê cada aba uma única vez.
 function atualizarStatus_(alteracoes) {
   const ss = SpreadsheetApp.getActive();
-  let feitas = 0;
+  const abas = {};
+  const pendentes = [];
   const erros = [];
   alteracoes.forEach((a) => {
+    const nomeAba = a.aba === 'receitas' ? ABAS.RECEITAS : ABAS.DESPESAS;
+    if (!abas[nomeAba]) abas[nomeAba] = lerParaAlterar_(ss.getSheetByName(nomeAba));
+    const c = abas[nomeAba];
+    const linha = Number(a.linha);
+    const iNome = c.cab.indexOf(a.aba === 'receitas' ? 'TIPO' : 'NOME_DESPESA');
+    const nomeAtual = c.exibidos[linha - 1] ? c.exibidos[linha - 1][iNome] : '';
+    if (String(nomeAtual).trim() !== String(a.nome).trim()) {
+      erros.push('Linha ' + linha + ' mudou na planilha ("' + nomeAtual + '"). Atualize o painel e tente de novo.');
+      return;
+    }
+    const valoresLinha = c.cab.map(() => '');
+    const escritas = [];
+    Object.keys(a.campos || {}).forEach((campo) => {
+      const j = c.cab.indexOf(campo);
+      if (j < 0) return;
+      const valor = converter_(campo, a.campos[campo], c.valores[linha - 1][j]);
+      valoresLinha[j] = valor;
+      escritas.push([j, valor]);
+    });
+    pendentes.push({ c: c, linha: linha, valoresLinha: valoresLinha, escritas: escritas });
+  });
+  // listas suspensas: inclui valores novos uma vez por aba
+  Object.keys(abas).forEach((nome) => {
+    const daAba = pendentes.filter((p) => p.c === abas[nome]);
+    if (daAba.length) garantirOpcoes_(abas[nome].aba, daAba[0].linha, abas[nome].cab.length, daAba.map((p) => p.valoresLinha));
+  });
+  let feitas = 0;
+  pendentes.forEach((p) => {
     try {
-      feitas += alterarLinha_(ss, a, erros);
+      p.escritas.forEach(([j, valor]) => p.c.aba.getRange(p.linha, j + 1).setValue(valor));
+      feitas++;
     } catch (err) {
-      erros.push('Linha ' + a.linha + ': ' + err.message);
+      erros.push('Linha ' + p.linha + ': ' + err.message);
     }
   });
   return { alteradas: feitas, erros: erros };
 }
 
-function alterarLinha_(ss, a, erros) {
-  {
-    const aba = ss.getSheetByName(a.aba === 'receitas' ? ABAS.RECEITAS : ABAS.DESPESAS);
-    const cab = aba.getRange(1, 1, 1, aba.getLastColumn()).getValues()[0].map(normalizar_);
-    const iNome = cab.indexOf(a.aba === 'receitas' ? 'TIPO' : 'NOME_DESPESA');
-    const linha = Number(a.linha);
-    const nomeAtual = aba.getRange(linha, iNome + 1).getDisplayValue();
-    if (String(nomeAtual).trim() !== String(a.nome).trim()) {
-      erros.push('Linha ' + linha + ' mudou na planilha ("' + nomeAtual + '"). Atualize o painel e tente de novo.');
-      return 0;
+function lerParaAlterar_(aba) {
+  const cab = aba.getRange(1, 1, 1, aba.getLastColumn()).getValues()[0].map(normalizar_);
+  const faixa = aba.getRange(1, 1, aba.getLastRow(), cab.length);
+  return { aba: aba, cab: cab, exibidos: faixa.getDisplayValues(), valores: faixa.getValues() };
+}
+
+// Preenche uma coluna inteira de uma vez (ex.: classificação inicial da RECORRENCIA)
+function preencherColuna_(nomeAba, coluna, valores) {
+  const aba = SpreadsheetApp.getActive().getSheetByName(nomeAba === 'receitas' ? ABAS.RECEITAS : ABAS.DESPESAS);
+  const c = lerParaAlterar_(aba);
+  const j = c.cab.indexOf(coluna);
+  if (j < 0) throw new Error('Coluna não encontrada: ' + coluna);
+  const iNome = c.cab.indexOf(nomeAba === 'receitas' ? 'TIPO' : 'NOME_DESPESA');
+  const coluna_ = c.valores.slice(1).map((l) => [l[j]]);
+  let feitas = 0;
+  const erros = [];
+  valores.forEach((v) => {
+    const i = Number(v.linha) - 1;
+    if (!c.exibidos[i] || String(c.exibidos[i][iNome]).trim() !== String(v.nome).trim()) {
+      erros.push('Linha ' + v.linha + ' mudou na planilha.');
+      return;
     }
-    Object.keys(a.campos || {}).forEach((campo) => {
-      const j = cab.indexOf(campo);
-      if (j < 0) return;
-      const celula = aba.getRange(linha, j + 1);
-      const valor = converter_(campo, a.campos[campo], celula.getValue());
-      garantirOpcoes_(aba, linha, cab.length, [cab.map((c, k) => (k === j ? valor : ''))]);
-      celula.setValue(valor);
-    });
-    return 1;
-  }
+    coluna_[i - 1][0] = v.valor;
+    feitas++;
+  });
+  if (feitas) aba.getRange(2, j + 1, coluna_.length, 1).setValues(coluna_);
+  return { alteradas: feitas, erros: erros };
 }
 
 // Listas suspensas: inclui valores novos (ex.: tipo criado no painel) para a planilha não recusar a gravação

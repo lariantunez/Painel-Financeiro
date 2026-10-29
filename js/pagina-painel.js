@@ -1,7 +1,7 @@
 // Tela principal: visão do mês.
 
-import { moeda, pct, nomeMes, somarMeses, MESES, escapeHtml, rotulo, mesAtual, RX_PARCELA } from './util.js';
-import { totaisMes, serieMeses, porTipo, fixoVariavel, contasAPagar, parcelamentos, maioresGastos, qualidade, tipoDe, parcelasDaMesmaCompra, nomeDaParcela } from './analise.js';
+import { moeda, pct, nomeMes, somarMeses, MESES, escapeHtml, rotulo, mesAtual, RX_PARCELA, parseValor, arred } from './util.js';
+import { totaisMes, serieMeses, porTipo, fixoVariavel, contasAPagar, parcelamentos, maioresGastos, qualidade, tipoDe, mesmaDespesa, lancamentosSeguintes, nomeDaParcela } from './analise.js';
 import { graficoColunas, responsivo, legenda, linhaTooltip, mostrarTooltip, esconderTooltip, toast, $, $$, cabecalho, ordenar, ligarOrdenacao, dataOrdenavel } from './ui.js';
 import { backendConfigurado, enviar } from './api.js';
 import { valoresUsados, regraParaLinha } from './model.js';
@@ -22,6 +22,7 @@ const COLS_DESPESAS = [
   { id: 'nome', rotulo: 'Descrição' },
   { id: 'tipo', rotulo: 'Tipo' },
   { id: 'categoria', rotulo: 'Categoria', classe: 'opc' },
+  { id: 'recorrencia', rotulo: 'Recorrência', classe: 'opc' },
   { id: 'forma', rotulo: 'Forma', classe: 'opc' },
   { id: 'parcela', rotulo: 'Parcela', classe: 'opc' },
   { id: 'status', rotulo: 'Status', classe: 'opc' },
@@ -32,6 +33,7 @@ const VALOR_DESPESA = {
   nome: (d) => d.nome,
   tipo: (d) => d.tipo,
   categoria: (d) => rotulo(d.categoria),
+  recorrencia: (d) => d.recorrencia,
   forma: (d) => d.forma,
   parcela: (d) => (d.parcelas && d.parcelas !== '1/1' ? d.parcelas : ''),
   status: (d) => rotulo(d.status),
@@ -131,7 +133,7 @@ export function renderPainel(raiz, app) {
           <div class="card-titulo"><h2>Contas a pagar</h2><span class="sub">${aPagar.length ? moeda(aPagar.reduce((s, d) => s + d.valor, 0)) : ''}</span></div>
           <div id="a-pagar"></div>
         </div>
-        <div class="card" id="fixo-variavel"></div>
+        <div class="card" id="composicao"></div>
       </div>
     </section>
 
@@ -187,7 +189,7 @@ export function renderPainel(raiz, app) {
 
   renderPorTipo($('#por-tipo', raiz), dados, mes, filtroTipo, app);
   renderAPagar($('#a-pagar', raiz), aPagar, mes, app);
-  renderFixoVariavel($('#fixo-variavel', raiz), totaisMes(dados, mes).despesas);
+  renderComposicao($('#composicao', raiz), totaisMes(dados, mes).despesas);
   renderParcelamentos($('#parcelamentos', raiz), dados, mes);
   renderMaiores($('#maiores', raiz), t.despesas);
   ctxTabela = { app, tipos: valoresUsados(dados.despesas, 'tipo').sort((a, b) => a.localeCompare(b, 'pt-BR')) };
@@ -396,19 +398,24 @@ function renderAPagar(el, lista, mes, app) {
   }
 }
 
-function renderFixoVariavel(el, despesas) {
+// Composição das despesas do mês: valor fixo × variável e conta mensal × gasto eventual
+function renderComposicao(el, despesas) {
   const { fixo, variavel } = fixoVariavel(despesas);
   const total = fixo + variavel;
   if (total <= 0) {
-    el.innerHTML = '<div class="card-titulo"><h2>Fixo × variável</h2></div><div class="vazio" style="padding:8px 0">Sem despesas no mês.</div>';
+    el.innerHTML = '<div class="card-titulo"><h2>Composição das despesas</h2></div><div class="vazio" style="padding:8px 0">Sem despesas no mês.</div>';
     return;
   }
-  el.innerHTML = `<div class="card-titulo"><h2>Fixo × variável</h2></div>
-    <div class="split"><div style="flex:${fixo};background:var(--receita)"></div><div style="flex:${variavel};background:var(--neutro)"></div></div>
-    <div class="legenda" style="justify-content:space-between">
-      <span><i class="swatch" style="background:var(--receita)"></i>Fixo <b class="num">${moeda(fixo)}</b> <span class="muted">${pct(fixo / total)}</span></span>
-      <span><i class="swatch" style="background:var(--neutro)"></i>Variável <b class="num">${moeda(variavel)}</b> <span class="muted">${pct(variavel / total)}</span></span>
+  const mensal = despesas.filter((d) => d.recorrencia === 'MENSAL').reduce((s, d) => s + d.valor, 0);
+  const divisao = (a, rotA, corA, b, rotB, dica) => `
+    <div class="split" title="${dica}"><div style="flex:${Math.max(a, 0)};background:${corA}"></div><div style="flex:${Math.max(b, 0)};background:var(--neutro)"></div></div>
+    <div class="legenda" style="justify-content:space-between;margin-bottom:12px">
+      <span><i class="swatch" style="background:${corA}"></i>${rotA} <b class="num">${moeda(a)}</b> <span class="muted">${pct(a / total)}</span></span>
+      <span><i class="swatch" style="background:var(--neutro)"></i>${rotB} <b class="num">${moeda(b)}</b> <span class="muted">${pct(b / total)}</span></span>
     </div>`;
+  el.innerHTML = `<div class="card-titulo"><h2>Composição das despesas</h2></div>
+    ${divisao(mensal, 'Mensal', 'var(--receita)', total - mensal, 'Eventual', 'Mensal: contas pagas todo mês · Eventual: gastos ao longo do mês')}
+    ${divisao(fixo, 'Fixo', 'var(--receita)', variavel, 'Variável', 'Fixo: mesmo valor todo mês · Variável: valor muda ou lançamento único')}`;
 }
 
 function renderParcelamentos(el, dados, mes) {
@@ -477,26 +484,37 @@ function renderTabela(el, t) {
   atualizarBotaoLimpar(ctxTabela?.app.estado);
 }
 
-// Listas de seleção na tabela (status e categoria): gravam na planilha ao escolher
+// Listas de seleção na tabela. Categoria e recorrência são classificação: valem para todos os
+// lançamentos da mesma despesa. Status é de cada lançamento (cada mês é pago separadamente).
 const SELETORES = {
   status: {
     coluna: 'STATUS',
+    rotulo: 'Status',
     opcoes: [['PAGO', 'Pago', 'pago'], ['A PAGAR', 'A pagar', 'a-pagar']],
     aviso: (d, v) => `“${d.nome}” marcada como ${v === 'PAGO' ? 'paga' : 'a pagar'}`,
   },
   categoria: {
     coluna: 'CATEGORIA',
+    rotulo: 'Categoria',
+    propaga: true,
     opcoes: [['FIXO', 'Fixo', 'fixo'], ['VARIÁVEL', 'Variável', '']],
     aviso: (d, v) => `“${d.nome}” agora é ${v === 'FIXO' ? 'fixa' : 'variável'}`,
+  },
+  recorrencia: {
+    coluna: 'RECORRENCIA',
+    rotulo: 'Recorrência',
+    propaga: true,
+    opcoes: [['MENSAL', 'Mensal', 'mensal'], ['EVENTUAL', 'Eventual', '']],
+    aviso: (d, v) => `“${d.nome}” agora é ${v === 'MENSAL' ? 'mensal' : 'eventual'}`,
   },
 };
 
 function seletor(campo, d) {
-  const { opcoes } = SELETORES[campo];
+  const { opcoes, rotulo: nomeCampo } = SELETORES[campo];
   const atual = rotulo(d[campo]);
   const lista = opcoes.some(([v]) => rotulo(v) === atual) || !atual ? opcoes : [...opcoes, [d[campo], d[campo], '']];
   const escolhida = lista.find(([v]) => rotulo(v) === atual);
-  return `<select class="status-sel ${escolhida?.[2] || ''}" data-sel-campo="${campo}" data-sel-linha="${d._linha}" aria-label="${campo === 'status' ? 'Status' : 'Categoria'} de ${escapeHtml(d.nome)}">
+  return `<select class="status-sel ${escolhida?.[2] || ''}" data-sel-campo="${campo}" data-sel-linha="${d._linha}" aria-label="${nomeCampo} de ${escapeHtml(d.nome)}">
     ${atual ? '' : '<option value="" selected>—</option>'}${lista.map(([v, r]) => `<option value="${escapeHtml(v)}" ${escolhida && v === escolhida[0] ? 'selected' : ''}>${escapeHtml(r)}</option>`).join('')}</select>`;
 }
 
@@ -504,18 +522,21 @@ function ligarSeletores(el, linhas) {
   for (const s of $$('[data-sel-campo]', el)) {
     s.addEventListener('change', async () => {
       const campo = s.dataset.selCampo;
-      const { coluna, aviso } = SELETORES[campo];
+      const { coluna, aviso, propaga } = SELETORES[campo];
       const d = linhas.find((x) => x._linha === +s.dataset.selLinha);
       const anterior = d[campo];
       const novo = s.value;
       if (!novo || rotulo(novo) === rotulo(anterior)) return;
+      const alvos = (propaga ? mesmaDespesa(ctxTabela.app.estado.dados.despesas, d) : [d]).filter((x) => x === d || rotulo(x[campo]) !== rotulo(novo));
       s.disabled = true;
       try {
-        const r = await enviar('status', { alteracoes: [{ aba: 'despesas', linha: d._linha, nome: d.nome, campos: { [coluna]: novo } }] });
-        if (r.erros?.length) throw new Error(r.erros[0]);
-        d[campo] = novo;
-        toast(aviso(d, novo));
-        ctxTabela.app.renderizar(); // atualiza também os quadros (contas a pagar, fixo × variável)
+        const r = await enviar('status', { alteracoes: alvos.map((x) => ({ aba: 'despesas', linha: x._linha, nome: x.nome, campos: { [coluna]: novo } })) });
+        if (r.erros?.length && !r.alteradas) throw new Error(r.erros[0]);
+        if (r.erros?.length) toast(`Alguns lançamentos não foram atualizados: ${r.erros[0]}`, 'erro', 8000);
+        for (const x of alvos) x[campo] = campo === 'recorrencia' ? rotulo(novo) : novo;
+        if (propaga) await ensinar(d, { [campo]: campo === 'recorrencia' ? rotulo(novo) : novo });
+        toast(alvos.length > 1 ? `${aviso(d, novo)} — ${alvos.length} lançamentos atualizados` : aviso(d, novo));
+        ctxTabela.app.renderizar(); // atualiza também os quadros (contas a pagar, composição)
       } catch (err) {
         toast(err.message, 'erro', 6000);
         s.value = anterior;
@@ -527,22 +548,32 @@ function ligarSeletores(el, linhas) {
 
 function linhaDespesa(d, editavel) {
   const desc = d.descOriginal && d.descOriginal !== d.nome ? `<span class="desc-original">${escapeHtml(d.descOriginal)}</span>` : '';
-  const categoria = editavel ? seletor('categoria', d) : escapeHtml(rotulo(d.categoria) === 'FIXO' ? 'Fixo' : d.categoria ? 'Variável' : '');
+  const texto = (campo) => escapeHtml(SELETORES[campo].opcoes.find(([v]) => rotulo(v) === rotulo(d[campo]))?.[1] || d[campo] || '');
   return `<tr><td class="tab">${escapeHtml(d.vencimento)}</td><td>${escapeHtml(d.nome)}${desc}</td>
-    <td>${escapeHtml(tipoDe(d))}</td><td class="opc">${categoria}</td><td class="text-2 opc">${escapeHtml(d.forma)}</td><td class="tab opc">${escapeHtml(d.parcelas && d.parcelas !== '1/1' ? d.parcelas : '')}</td>
+    <td>${escapeHtml(tipoDe(d))}</td>
+    <td class="opc">${editavel ? seletor('categoria', d) : texto('categoria')}</td>
+    <td class="opc">${editavel ? seletor('recorrencia', d) : texto('recorrencia')}</td>
+    <td class="text-2 opc">${escapeHtml(d.forma)}</td><td class="tab opc">${escapeHtml(d.parcelas && d.parcelas !== '1/1' ? d.parcelas : '')}</td>
     <td class="opc">${editavel ? seletor('status', d) : statusBadge(d.status)}</td><td class="num">${moeda(d.valor)}</td>
-    ${editavel ? `<td class="acao-linha"><button class="btn btn-ghost btn-icone btn-sm" data-editar="${d._linha}" aria-label="Editar ${escapeHtml(d.nome)}" title="Renomear / mudar tipo">✎</button></td>` : ''}</tr>`;
+    ${editavel ? `<td class="acao-linha"><button class="btn btn-ghost btn-icone btn-sm" data-editar="${d._linha}" aria-label="Editar ${escapeHtml(d.nome)}" title="Editar nome, tipo e valor">✎</button></td>` : ''}</tr>`;
 }
 
 function linhaEmEdicao(d) {
   const tipos = ctxTabela.tipos;
-  const outras = parcelasDaMesmaCompra(ctxTabela.app.estado.dados.despesas, d).length - 1;
-  const aviso = outras > 0 ? `<span class="desc-original" style="color:var(--accent)">Também atualiza as outras ${outras} parcela(s) desta compra</span>` : '';
+  const despesas = ctxTabela.app.estado.dados.despesas;
+  const iguais = mesmaDespesa(despesas, d).length - 1;
+  const seguintes = lancamentosSeguintes(despesas, d).length - 1;
+  const alcance = iguais > 0
+    ? `<span class="desc-original" style="color:var(--accent)" id="edit-alcance">Nome e tipo: este e mais ${iguais} lançamento(s) igual(is) · valor: este${seguintes ? ` e os ${seguintes} seguinte(s)` : ''}</span>
+       <label class="desc-original" style="display:flex;gap:6px;align-items:center;cursor:pointer"><input type="checkbox" id="edit-so"> Só neste lançamento</label>`
+    : '';
+  const texto = (campo) => escapeHtml(SELETORES[campo].opcoes.find(([v]) => rotulo(v) === rotulo(d[campo]))?.[1] || '');
   return `<tr class="editando"><td class="tab">${escapeHtml(d.vencimento)}</td>
-    <td><input class="input input-sm" id="edit-nome" value="${escapeHtml(d.nome)}" aria-label="Nome da despesa">${d.descOriginal ? `<span class="desc-original">No banco: ${escapeHtml(d.descOriginal)}</span>` : ''}${aviso}</td>
+    <td><input class="input input-sm" id="edit-nome" value="${escapeHtml(d.nome)}" aria-label="Nome da despesa">${d.descOriginal ? `<span class="desc-original">No banco: ${escapeHtml(d.descOriginal)}</span>` : ''}${alcance}</td>
     <td><select class="select select-sm" id="edit-tipo" aria-label="Tipo">${!d.tipo ? '<option value="">Escolha…</option>' : ''}${tipos.map((x) => `<option ${x === d.tipo ? 'selected' : ''}>${escapeHtml(x)}</option>`).join('')}</select></td>
-    <td class="text-2 opc">${escapeHtml(rotulo(d.categoria) === 'FIXO' ? 'Fixo' : 'Variável')}</td><td class="text-2 opc">${escapeHtml(d.forma)}</td><td class="tab opc">${escapeHtml(d.parcelas && d.parcelas !== '1/1' ? d.parcelas : '')}</td><td class="opc">${statusBadge(d.status)}</td>
-    <td class="num">${moeda(d.valor)}</td>
+    <td class="text-2 opc">${texto('categoria')}</td><td class="text-2 opc">${texto('recorrencia')}</td>
+    <td class="text-2 opc">${escapeHtml(d.forma)}</td><td class="tab opc">${escapeHtml(d.parcelas && d.parcelas !== '1/1' ? d.parcelas : '')}</td><td class="opc">${statusBadge(d.status)}</td>
+    <td class="num"><input class="input input-sm num" id="edit-valor" inputmode="decimal" style="width:100px;text-align:right" value="${d.valor.toFixed(2).replace('.', ',')}" aria-label="Valor"></td>
     <td class="acao-linha"><button class="btn btn-primario btn-sm" id="edit-salvar">Salvar</button> <button class="btn btn-ghost btn-sm" id="edit-cancelar" aria-label="Cancelar">✕</button></td></tr>`;
 }
 
@@ -565,32 +596,42 @@ function ligarEdicao(el, t, linhas) {
   const salvar = async () => {
     const nome = $('#edit-nome', el).value.trim();
     const tipo = $('#edit-tipo', el).value;
-    // Parcelada: o novo nome/tipo vale para todas as parcelas da compra, cada uma com seu número
+    const valor = arred(parseValor($('#edit-valor', el).value));
+    const so = $('#edit-so', el)?.checked;
     const mudouNome = nome && nome !== d.nome;
     const mudouTipo = tipo && tipo !== d.tipo;
-    if (!mudouNome && !mudouTipo) return cancelar();
-    const parcelas = parcelasDaMesmaCompra(ctxTabela.app.estado.dados.despesas, d);
-    const alteracoes = parcelas
-      .map((x) => {
-        const campos = {};
-        const novoNome = x === d && !RX_PARCELA.test(d.nome) ? nome : nomeDaParcela(nome, x);
-        if (mudouNome && novoNome !== x.nome) campos.NOME_DESPESA = novoNome;
-        if (mudouTipo && tipo !== x.tipo) campos.TIPO = tipo;
-        return { x, campos };
-      })
-      .filter(({ campos }) => Object.keys(campos).length);
+    const mudouValor = $('#edit-valor', el).value.trim() !== '' && Math.abs(valor - d.valor) > 0.004;
+    if (!mudouNome && !mudouTipo && !mudouValor) return cancelar();
+
+    // Nome e tipo: todos os lançamentos da mesma despesa. Valor: este e os seguintes (reajuste).
+    const despesas = ctxTabela.app.estado.dados.despesas;
+    const todos = so ? [d] : mesmaDespesa(despesas, d);
+    const seguintes = so ? [d] : lancamentosSeguintes(despesas, d);
+    const porLinha = new Map();
+    const campos = (x) => {
+      if (!porLinha.has(x)) porLinha.set(x, {});
+      return porLinha.get(x);
+    };
+    for (const x of todos) {
+      const novoNome = x === d && !RX_PARCELA.test(d.nome) ? nome : nomeDaParcela(nome, x);
+      if (mudouNome && novoNome !== x.nome) campos(x).NOME_DESPESA = novoNome;
+      if (mudouTipo && tipo !== x.tipo) campos(x).TIPO = tipo;
+    }
+    if (mudouValor) for (const x of seguintes) if (Math.abs(x.valor - valor) > 0.004) campos(x).VALOR = valor;
+    const alteracoes = [...porLinha].filter(([, c]) => Object.keys(c).length);
     if (!alteracoes.length) return cancelar();
+
     const botao = $('#edit-salvar', el);
     botao.disabled = true;
     botao.textContent = 'Salvando…';
     try {
-      const r = await enviar('status', { alteracoes: alteracoes.map(({ x, campos }) => ({ aba: 'despesas', linha: x._linha, nome: x.nome, campos })) });
+      const r = await enviar('status', { alteracoes: alteracoes.map(([x, c]) => ({ aba: 'despesas', linha: x._linha, nome: x.nome, campos: c })) });
       if (r.erros?.length && !r.alteradas) throw new Error(r.erros[0]);
-      if (r.erros?.length) toast(`Algumas parcelas não foram atualizadas: ${r.erros[0]}`, 'erro', 8000);
-      await ensinar(d, nome || d.nome, tipo || d.tipo);
-      for (const { x, campos } of alteracoes) Object.assign(x, { nome: campos.NOME_DESPESA || x.nome, tipo: campos.TIPO || x.tipo });
+      if (r.erros?.length) toast(`Alguns lançamentos não foram atualizados: ${r.erros[0]}`, 'erro', 8000);
+      if (!so && (mudouNome || mudouTipo)) await ensinar(d, { nome: nome || d.nome, tipo: tipo || d.tipo });
+      for (const [x, c] of alteracoes) Object.assign(x, { nome: c.NOME_DESPESA || x.nome, tipo: c.TIPO || x.tipo, valor: c.VALOR ?? x.valor });
       editando = null;
-      toast(alteracoes.length > 1 ? `${alteracoes.length} parcelas atualizadas na planilha` : 'Despesa atualizada na planilha');
+      toast(alteracoes.length > 1 ? `${alteracoes.length} lançamentos atualizados na planilha` : 'Despesa atualizada na planilha');
       ctxTabela.app.recarregar();
     } catch (err) {
       toast(err.message, 'erro', 6000);
@@ -600,20 +641,24 @@ function ligarEdicao(el, t, linhas) {
   };
   $('#edit-salvar', el).addEventListener('click', salvar);
   $('#edit-cancelar', el).addEventListener('click', cancelar);
-  $('#edit-nome', el).addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') salvar();
-    if (e.key === 'Escape') cancelar();
-  });
+  for (const campo of ['#edit-nome', '#edit-valor']) {
+    $(campo, el).addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') salvar();
+      if (e.key === 'Escape') cancelar();
+    });
+  }
 }
 
-// Despesa importada (fora de marketplace): o novo nome/tipo passa a valer nas próximas importações
-async function ensinar(d, nome, tipo) {
+// Despesa importada (fora de marketplace): a classificação passa a valer nas próximas importações
+async function ensinar(d, mudancas) {
   if (!d.descOriginal) return;
   const chave = chaveDescricao(d.descOriginal);
   if (!chave || ehMarketplace(chave)) return;
   const atual = ctxTabela.app.estado.dados.regras.find((r) => r.chave === chave);
-  const base = atual || { chave, destino: 'DESPESA', categoria: d.categoria, titular: '', perguntar: false, usos: 1 };
-  await enviar('regras', { regras: [regraParaLinha({ ...base, nome: nome.replace(RX_PARCELA, '').trim(), tipo })] });
+  const base = atual || { chave, destino: 'DESPESA', nome: d.nome, tipo: d.tipo, categoria: d.categoria, recorrencia: d.recorrencia, titular: '', perguntar: false, usos: 1 };
+  const regra = { ...base, ...mudancas };
+  regra.nome = String(regra.nome || '').replace(RX_PARCELA, '').trim();
+  await enviar('regras', { regras: [regraParaLinha(regra)] });
 }
 
 function statusBadge(status) {

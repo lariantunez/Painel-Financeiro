@@ -1,4 +1,4 @@
-// Assistente de importação: arquivos -> contas fixas -> revisão -> envio.
+// Assistente de importação: arquivos -> contas do mês -> revisão -> envio.
 
 import { lerExtrato } from './parsers.js';
 import { criarClassificador, propagarDecisao, regrasAPartirDe, paraLinhasPlanilha, FORMAS, FORMAS_RECEITA, CATEGORIAS } from './classifier.js';
@@ -9,7 +9,7 @@ import { moeda, nomeMes, mesAtual, somarMeses, escapeHtml, parseValor, parseData
 import { backendConfigurado, enviar, config, salvarRegrasLocais } from './api.js';
 import { toast, $, $$ } from './ui.js';
 
-const PASSOS = ['Arquivos', 'Contas fixas', 'Revisar', 'Enviar'];
+const PASSOS = ['Arquivos', 'Contas do mês', 'Revisar', 'Enviar'];
 const INSTITUICOES = ['NUBANK', 'BRADESCO', 'ITAÚ', 'PORTO'];
 
 const imp = novoEstado();
@@ -79,15 +79,15 @@ function passoArquivos(el, app) {
     </div>
 
     <div class="card">
-      <div class="card-titulo"><h2>Contas fixas</h2><span class="sub">No próximo passo você confirma valor e status de cada uma</span></div>
-      <label class="campo" style="max-width:260px">Mês das contas fixas
+      <div class="card-titulo"><h2>Contas do mês</h2><span class="sub">Contas mensais: no próximo passo você confirma valor e status de cada uma</span></div>
+      <label class="campo" style="max-width:260px">Mês das contas mensais
         <select class="select" id="mes-fixas">${meses.map((m) => `<option value="${m}" ${m === imp.mesFixas ? 'selected' : ''}>${nomeMes(m)}</option>`).join('')}</select>
       </label>
     </div>
 
     <div class="rodape-acoes">
-      <span class="muted">${total ? `${total} lançamento(s) lidos dos arquivos` : 'Sem arquivos? Dá para lançar só as contas fixas.'}</span>
-      <button class="btn btn-primario" id="avancar">${total ? 'Continuar' : 'Só contas fixas'} →</button>
+      <span class="muted">${total ? `${total} lançamento(s) lidos dos arquivos` : 'Sem arquivos? Dá para lançar só as contas do mês.'}</span>
+      <button class="btn btn-primario" id="avancar">${total ? 'Continuar' : 'Só contas do mês'} →</button>
     </div>
     ${historicoImportacoes(app)}`;
 
@@ -234,7 +234,7 @@ async function desfazer(botao, app) {
   }
 }
 
-// ═════════════════════════ Passo 2 — Contas fixas ═════════════════════════
+// ═════════════════════════ Passo 2 — Contas do mês ═════════════════════════
 
 function carregarFixas(app) {
   imp.fixas = montarFixas({ ...app.estado.dados, mesAlvo: imp.mesFixas, instituicaoCartao: config.instituicaoCartao });
@@ -247,19 +247,19 @@ function passoFixas(el, app) {
   const pend = f.despesas.filter((x) => !x.jaLancado);
   el.innerHTML = `
     <div class="card" style="margin-bottom:12px">
-      <div class="card-titulo"><h2>Despesas fixas · ${nomeMes(imp.mesFixas)}</h2>
+      <div class="card-titulo"><h2>Contas mensais · ${nomeMes(imp.mesFixas)}</h2>
         <span class="sub">${pend.filter((x) => x.incluir).length} para lançar${f.despesas.length - pend.length ? ` · ${f.despesas.length - pend.length} já na planilha` : ''}</span></div>
       <p class="muted small" style="margin:-6px 0 8px">Desmarque o que não existe mais, ajuste o valor deste mês e diga se já pagou. Vencimento e parcela já vêm calculados.</p>
-      <div id="lista-fixas">${f.despesas.map((x, i) => linhaFixa(x, i)).join('') || '<div class="vazio">Nenhuma conta fixa encontrada nos últimos meses.</div>'}</div>
+      <div id="lista-fixas">${f.despesas.map((x, i) => linhaFixa(x, i)).join('') || '<div class="vazio">Nenhuma conta mensal encontrada nos últimos meses.</div>'}</div>
       ${imp.novasFixas.map((x, i) => linhaNovaFixa(x, i, tipos)).join('')}
-      <button class="btn btn-sm" id="add-fixa" style="margin-top:10px">+ Nova conta fixa</button>
+      <button class="btn btn-sm" id="add-fixa" style="margin-top:10px">+ Nova conta mensal</button>
       ${f.viaCartao.length ? `<p class="small muted" style="margin:14px 0 0">Vêm pela fatura do cartão e são reconhecidas na importação: ${f.viaCartao.map(escapeHtml).join(', ')}.</p>` : ''}
     </div>
 
     ${
       f.receitas.length
         ? `<div class="card">
-      <div class="card-titulo"><h2>Receitas fixas · ${nomeMes(imp.mesFixas)}</h2><span class="sub">Salários e outras entradas recorrentes</span></div>
+      <div class="card-titulo"><h2>Receitas mensais · ${nomeMes(imp.mesFixas)}</h2><span class="sub">Salários e outras entradas recorrentes</span></div>
       ${f.receitas.map((x, i) => linhaReceitaFixa(x, i)).join('')}
       ${f.receitasViaExtrato.length ? `<p class="small muted" style="margin:14px 0 0">Chegam pelo extrato da conta e são reconhecidas na importação: ${f.receitasViaExtrato.map(escapeHtml).join(', ')}.</p>` : ''}
     </div>`
@@ -370,7 +370,7 @@ function congelarSecoes() {
     const f = doChecklist.find((x) => Math.abs(parseValor(x.valor) - l.valor) < 0.01);
     if (f) {
       doChecklist.splice(doChecklist.indexOf(f), 1);
-      Object.assign(l, { possivelDuplicado: true, excluir: true, motivo: `Mesma conta fixa “${f.nome}” do passo anterior` });
+      Object.assign(l, { possivelDuplicado: true, excluir: true, motivo: `Mesma conta mensal “${f.nome}” do passo anterior` });
     }
   }
   for (const l of imp.lancamentos) {
@@ -393,7 +393,7 @@ function pendentes() {
 
 function passoRevisar(el, app) {
   if (!imp.lancamentos.length) {
-    el.innerHTML = `<div class="card"><div class="vazio">Nenhum arquivo importado — siga para enviar as contas fixas.</div></div>
+    el.innerHTML = `<div class="card"><div class="vazio">Nenhum arquivo importado — siga para enviar as contas do mês.</div></div>
       <div class="rodape-acoes"><button class="btn" data-ir="1">← Voltar</button><button class="btn btn-primario" data-ir="3">Continuar →</button></div>`;
     for (const b of $$('[data-ir]', el)) b.addEventListener('click', () => irPara(+b.dataset.ir, app));
     return;
@@ -482,12 +482,13 @@ function linhaRevisao(l, i, ctx) {
   let campos;
   if (l.destino === 'DESPESA') {
     campos = `<select class="select select-sm ${l.tipo ? '' : 'falta'}" data-c="tipo" ${dis} aria-label="Tipo">${opcoes(ctx.tipos, l.tipo, 'Escolha o tipo…')}<option value="__novo">+ Novo tipo…</option></select>
-      <select class="select select-sm" data-c="categoria" ${dis} aria-label="Categoria">${opcoes(CATEGORIAS, l.categoria)}</select>`;
+      <select class="select select-sm" data-c="categoria" ${dis} aria-label="Categoria (valor fixo ou variável)">${opcoes(CATEGORIAS, l.categoria)}</select>
+      <select class="select select-sm" data-c="recorrencia" ${dis} aria-label="Recorrência"><option value="EVENTUAL" ${l.recorrencia !== 'MENSAL' ? 'selected' : ''}>Eventual</option><option value="MENSAL" ${l.recorrencia === 'MENSAL' ? 'selected' : ''}>Mensal</option></select>`;
   } else if (l.destino === 'RECEITA') {
     campos = `<input class="input input-sm ${l.tipo ? '' : 'falta'}" data-c="tipo" list="dl-receitas" placeholder="Descrição da receita" value="${escapeHtml(l.tipo)}" ${dis} aria-label="Descrição da receita">
-      <select class="select select-sm ${l.titular ? '' : 'falta'}" data-c="titular" ${dis} aria-label="Quem recebeu">${opcoes(ctx.titulares, l.titular, 'Quem recebeu…')}</select>`;
+      <select class="select select-sm ${l.titular ? '' : 'falta'}" data-c="titular" ${dis} aria-label="Quem recebeu">${opcoes(ctx.titulares, l.titular, 'Quem recebeu…')}</select><span></span>`;
   } else {
-    campos = '<span class="muted small" style="grid-column:span 2">não vai para a planilha</span>';
+    campos = '<span class="muted small" style="grid-column:span 3">não vai para a planilha</span>';
   }
   const parcela = l.parcelas && l.parcelas !== '1/1' ? ` · parcela ${l.parcelas}` : '';
   const podePerguntar = !travado && l.destino !== 'IGNORAR' && l.secao === 'atencao';
@@ -578,7 +579,7 @@ function ligarRevisao(el, app) {
 
     decidir(l);
     // Mudanças estruturais redesenham; edição simples só atualiza o contador
-    if (['destino', 'tipo', 'categoria', 'titular', 'incluir'].includes(c)) redesenhar(el, app);
+    if (['destino', 'tipo', 'categoria', 'recorrencia', 'titular', 'incluir'].includes(c)) redesenhar(el, app);
     else atualizarPendencias(el);
   });
 }
@@ -667,7 +668,7 @@ function passoEnviar(el, app) {
     <div class="resumo">
       <div class="card"><div class="muted small">Despesas</div><div class="valor">${env.despesas.length}</div><div class="small text-2 num">${moeda(totD)}</div></div>
       <div class="card"><div class="muted small">Receitas</div><div class="valor">${env.receitas.length}</div><div class="small text-2 num">${moeda(totR)}</div></div>
-      <div class="card"><div class="muted small">Contas fixas</div><div class="valor">${env.qtdFixas}</div><div class="small text-2">${env.alteracoes.length ? `+ ${env.alteracoes.length} linha(s) já existente(s) atualizada(s)` : 'novas no mês'}</div></div>
+      <div class="card"><div class="muted small">Contas do mês</div><div class="valor">${env.qtdFixas}</div><div class="small text-2">${env.alteracoes.length ? `+ ${env.alteracoes.length} linha(s) já existente(s) atualizada(s)` : 'novas no mês'}</div></div>
       <div class="card"><div class="muted small">Aprendizados</div><div class="valor">${env.regras.length}</div><div class="small text-2">regras novas ou atualizadas</div></div>
     </div>
     <div class="card">

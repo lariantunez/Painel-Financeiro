@@ -46,7 +46,8 @@ export function montarFixas({ despesas, receitas, mesAlvo, instituicaoCartao = '
     if (!recorrentes.has(s)) recorrentes.set(s, new Set());
     recorrentes.get(s).add(d.mesRef);
   }
-  const ehFixa = (d) => rotulo(d.categoria) === 'FIXO' || (recorrentes.get(serieDe(d.nome))?.size || 0) >= 3;
+  // Com a coluna RECORRENCIA preenchida ela manda; sem ela (planilhas antigas), vale FIXO ou recorrência pelo histórico
+  const ehFixa = (d) => (d.recorrencia ? d.recorrencia === 'MENSAL' : rotulo(d.categoria) === 'FIXO' || (recorrentes.get(serieDe(d.nome))?.size || 0) >= 3);
 
   const ultimas = new Map();
   const noMesAlvo = new Map();
@@ -110,7 +111,7 @@ export function montarFixas({ despesas, receitas, mesAlvo, instituicaoCartao = '
     if (rotulo(r.categoria) !== 'FIXO' || !r.mesRef) continue;
     const serie = `${rotulo(r.tipo)}|${rotulo(r.nome)}`;
     if (pelaConta.has(serie)) {
-      viaExtrato.add(r.tipo);
+      if (![...viaExtrato].some((t) => rotulo(t) === rotulo(r.tipo))) viaExtrato.add(r.tipo);
       continue;
     }
     if (r.mesRef === mesAlvo) {
@@ -154,6 +155,7 @@ export function fixasParaLinhas(fixas, mesAlvo) {
       VENCIMENTO: f.vencimento,
       VALOR: arred(parseValor(f.valor)),
       CATEGORIA: f.categoria || 'FIXO',
+      RECORRENCIA: 'MENSAL',
       STATUS: f.status,
       FORMA_DE_PGTO: f.forma,
       PARCELAS: f.parcelas,

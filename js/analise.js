@@ -2,7 +2,7 @@
 
 import { rotulo, somarMeses, parseParcela, RX_PARCELA, mesAtual } from './util.js';
 import { serieDe } from './fixas.js';
-import { chaveDescricao } from './classifier.js';
+import { chaveDescricao, ehMarketplace } from './classifier.js';
 
 export const SEM_TIPO = 'Sem tipo';
 
@@ -36,6 +36,59 @@ export function parcelasDaMesmaCompra(despesas, d) {
     if (chave && x.descOriginal && chaveDescricao(x.descOriginal) === chave) return true;
     return Boolean(x.mesRef && d.mesRef) && Math.abs(mesesEntre(d.mesRef, x.mesRef) - (px.k - p.k)) <= 1;
   });
+}
+
+// "Mesma despesa" para propagar classificação: parcelas da mesma compra ou lançamentos com o mesmo nome.
+// Compras de marketplace com nome genérico ("shopee") são diferentes entre si: só a própria.
+export function mesmaDespesa(despesas, d) {
+  const p = parcelaDe(d);
+  // compra parcelada no cartão: as parcelas da compra. Contas mensais numeradas (financiamento 23/63) seguem pelo nome,
+  // para um reajuste de valor não "separar" a conta das anteriores
+  if (p && p.n > 1 && (RX_PARCELA.test(d.nome) || rotulo(d.forma).startsWith('CREDITO'))) return parcelasDaMesmaCompra(despesas, d);
+  const serie = serieDe(d.nome);
+  if (!serie || ehMarketplace(chaveDescricao(d.nome))) return [d];
+  return despesas.filter((x) => x === d || serieDe(x.nome) === serie);
+}
+
+// Reajuste de valor: vale para o lançamento e os seguintes (anteriores ficam como estão)
+export function lancamentosSeguintes(despesas, d) {
+  const p = parcelaDe(d);
+  // pelo mês de referência (na planilha a numeração de parcelas às vezes não foi incrementada)
+  return mesmaDespesa(despesas, d).filter((x) => {
+    if (x === d) return true;
+    if (!x.mesRef || !d.mesRef) return false;
+    const px = parcelaDe(x);
+    return x.mesRef > d.mesRef || (x.mesRef === d.mesRef && p && px && px.k > p.k);
+  });
+}
+
+export const RECORRENCIAS = ['MENSAL', 'EVENTUAL'];
+
+// Recorrência sugerida para lançamentos sem essa informação:
+// MENSAL = conta paga todo mês (fixa, financiamento/carnê fora do cartão, ou aparece 1x por mês em 3+ meses)
+// EVENTUAL = gasto que acontece ao longo do mês (compras, feira, restaurante, parcelas de compras no cartão)
+export function inferirRecorrencia(despesas) {
+  const porSerie = new Map();
+  for (const d of despesas) {
+    const s = serieDe(d.nome);
+    if (!s || !d.mesRef) continue;
+    if (!porSerie.has(s)) porSerie.set(s, { meses: new Set(), n: 0 });
+    const e = porSerie.get(s);
+    e.meses.add(d.mesRef);
+    e.n++;
+  }
+  const resultado = new Map();
+  for (const d of despesas) {
+    let r = 'EVENTUAL';
+    const p = parcelaDe(d);
+    const cartao = rotulo(d.forma).startsWith('CREDITO');
+    const e = porSerie.get(serieDe(d.nome));
+    if (rotulo(d.categoria) === 'FIXO') r = 'MENSAL';
+    else if (p && p.n > 1 && !cartao) r = 'MENSAL'; // financiamento, carnê
+    else if (!(p && p.n > 1) && e && e.meses.size >= 3 && e.n / e.meses.size <= 1.2 && !ehMarketplace(chaveDescricao(d.nome))) r = 'MENSAL';
+    resultado.set(d, r);
+  }
+  return resultado;
 }
 
 // Novo nome para uma parcela, mantendo o "- Parcela k/n" de cada uma

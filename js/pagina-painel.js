@@ -427,7 +427,10 @@ function avisos(app, problemas) {
   if (app.estado.erro) {
     html += `<div class="aviso erro"><div><b>Não consegui atualizar os dados.</b> ${escapeHtml(app.estado.erro)}<br><span class="small text-2">Mostrando a última cópia salva neste navegador.</span></div></div>`;
   }
-  if (!backendConfigurado()) {
+  const comoApp = window.navigator.standalone === true || window.matchMedia?.('(display-mode: standalone)').matches;
+  if (!backendConfigurado() && comoApp) {
+    html += `<div class="aviso"><div><b>Este atalho da tela inicial não está conectado à planilha.</b> Apague o atalho, abra no Safari o link do celular (no computador: Configurações → “Copiar link para o celular”) e toque em Compartilhar → “Adicionar à Tela de Início” com a página aberta.</div></div>`;
+  } else if (!backendConfigurado()) {
     html += `<div class="aviso info"><div><b>Falta um passo para a importação automática.</b> Conecte o painel à planilha (leva 3 minutos) para gravar lançamentos, marcar contas como pagas e deixar a planilha privada.</div><div class="acoes"><a class="btn btn-sm" href="#/config">Configurar</a></div></div>`;
   }
   for (const p of problemas) {

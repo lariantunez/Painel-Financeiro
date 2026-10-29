@@ -33,7 +33,14 @@ export function renderConfig(raiz, app) {
         <button class="btn btn-primario" id="testar">Testar e salvar</button>
         ${conectado ? '<button class="btn" id="desconectar">Desconectar</button><button class="btn" id="link">Copiar link para o celular</button>' : ''}
       </div>
-      ${conectado ? '<p class="small muted" style="margin:10px 0 0">O link para o celular já leva a conexão configurada. Envie só para você — quem tiver o link consegue ver seus dados.</p>' : ''}
+      ${
+        conectado
+          ? `<div class="small text-2" style="margin:12px 0 0;line-height:1.6">
+              <b>Usar no celular como app:</b> envie o link para você mesma, abra-o no <b>Safari</b> (iPhone) ou no Chrome (Android) e, com o painel aberto, toque em
+              <b>Compartilhar → Adicionar à Tela de Início</b>. O atalho já abre conectado, em tela cheia.
+              <br><span class="muted">O link contém a chave da sua planilha: envie só para você.</span></div>`
+          : ''
+      }
     </div>
 
     <div class="card" style="margin-bottom:12px">

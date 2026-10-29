@@ -179,7 +179,7 @@ main { width: 100%; max-width: 1680px; margin: 0 auto; padding: 24px clamp(16px,
 
 @media (max-width: 900px) {
   .layout { grid-template-columns: minmax(0, 1fr); }
-  .lateral { position: sticky; top: 0; z-index: 25; height: auto; flex-direction: row; flex-wrap: wrap; align-items: center; padding: 10px 12px; gap: 8px; }
+  .lateral { position: sticky; top: 0; z-index: 25; height: auto; flex-direction: row; flex-wrap: wrap; align-items: center; padding: calc(10px + env(safe-area-inset-top, 0px)) 12px 10px; gap: 8px; }
   .marca { font-size: 13px; }
   .marca svg { width: 28px; height: 28px; }
   .nav { order: 3; flex-basis: 100%; flex-direction: row; overflow-x: auto; scrollbar-width: none; }

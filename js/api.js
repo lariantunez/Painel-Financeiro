@@ -137,23 +137,39 @@ function mesclarRegras(base, novas) {
 
 // Link que leva a configuração para outro aparelho (ex.: celular)
 // Link curto e só com caracteres seguros (letras, números, - e _), que apps de mensagem não quebram:
-// #c=<id da implantação do backend>.<token>
+// ?c=<id da implantação do backend>.<token>
+// Fica no endereço (não é apagado): o atalho da tela inicial do iPhone tem memória separada do Safari
+// e precisa do endereço completo para abrir já conectado.
 const RX_URL_BACKEND = /^https:\/\/script\.google\.com\/macros\/s\/([\w-]+)\/exec$/;
 
 export function linkDeConfiguracao() {
   const id = (config.url.match(RX_URL_BACKEND) || [])[1];
   if (!id || !/^[\w-]+$/.test(config.token)) throw new Error('Conexão não configurada neste navegador.');
-  return `${location.origin}${location.pathname}#c=${id}.${config.token}`;
+  return `${location.origin}${location.pathname}?c=${id}.${config.token}#/painel`;
 }
 
-// Retorna 'ok' (configurou), 'erro' (link veio quebrado) ou null (não é link de configuração)
+const aplicarChave = (id, token) => {
+  const url = `https://script.google.com/macros/s/${id}/exec`;
+  const mudou = config.url !== url || config.token !== token;
+  if (mudou) salvarConfig({ url, token });
+  return mudou;
+};
+
+// Retorna 'ok' (configurou agora), 'erro' (link veio quebrado) ou null (nada a fazer)
 export function importarConfiguracaoDoLink() {
   const hash = location.hash;
   const limpar = () => history.replaceState(null, '', location.pathname + '#/painel');
+  const param = new URLSearchParams(location.search).get('c');
+  if (param !== null) {
+    const m = param.match(/^([\w-]+)\.([\w-]+)$/);
+    if (!m) return 'erro';
+    return aplicarChave(m[1], m[2]) ? 'ok' : null; // abre conectado a cada uso (sem aviso se já estava)
+  }
   const curto = hash.match(/^#c=([\w-]+)\.([\w-]+)$/);
   if (curto) {
-    salvarConfig({ url: `https://script.google.com/macros/s/${curto[1]}/exec`, token: curto[2] });
-    limpar();
+    // link da versão anterior: passa a chave para o endereço, para o atalho da tela inicial guardá-la
+    aplicarChave(curto[1], curto[2]);
+    history.replaceState(null, '', `${location.pathname}?c=${curto[1]}.${curto[2]}#/painel`);
     return 'ok';
   }
   const antigo = hash.match(/#config=([^&]+)/); // formato anterior (base64)

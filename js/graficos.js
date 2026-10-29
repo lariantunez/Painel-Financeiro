@@ -163,7 +163,7 @@ export function rosca(container, { segmentos, centro, sub, tooltip }) {
       <text x="100" y="98" text-anchor="middle" class="rosca-centro">${escapeHtml(centro)}</text>
       <text x="100" y="118" text-anchor="middle" class="rosca-sub">${escapeHtml(sub || '')}</text>
     </svg>
-    <div class="rosca-legenda">${segmentos
+    <div class="rosca-legenda ${segmentos.length > 8 ? 'compacta' : ''}">${segmentos
       .map(
         (s) => `<button class="rosca-item" ${s.atributos || ''}><i class="swatch" style="background:${s.cor}"></i><span class="r-nome">${escapeHtml(s.rotulo)}</span><span class="r-pct">${pct(Math.max(0, s.valor) / total)}</span></button>`
       )

@@ -26,6 +26,8 @@
   /* tipos de despesa (rosca, anéis): ordem fixa validada */
   --cat-1: #2a78d6; --cat-2: #eb6834; --cat-3: #1baf7a; --cat-4: #eda100;
   --cat-5: #e87ba4; --cat-6: #008300; --cat-7: #6250d6; --cat-8: #e34948;
+  --cat-9: #a61b86; --cat-10: #ad74ff; --cat-11: #964d09; --cat-12: #3bacda; --cat-13: #9d8519;
+  --cat-14: #a465a7; --cat-15: #ba022f; --cat-16: #92ac18; --cat-17: #d84497; --cat-18: #7d8bdb;
 
   /* barra lateral: azul-marinho nos dois temas */
   --lateral: #1c1d3c;
@@ -72,6 +74,8 @@
     --media-fundo: color-mix(in srgb, var(--despesa) 30%, var(--surface));
     --cat-1: #3987e5; --cat-2: #d95926; --cat-3: #199e70; --cat-4: #c98500;
     --cat-5: #d55181; --cat-6: #008300; --cat-7: #9085e9; --cat-8: #e66767;
+    --cat-9: #ae55c1; --cat-10: #85861f; --cat-11: #bf75af; --cat-12: #6e69f3; --cat-13: #3fad1e;
+    --cat-14: #01a2c5; --cat-15: #a167f1; --cat-16: #b36d2a; --cat-17: #dd56b8; --cat-18: #6887ff;
     --lateral: #17183a;
     --good-text: #2fc25b;
     --good-soft: #15291f;
@@ -104,6 +108,8 @@
   --media-fundo: color-mix(in srgb, var(--despesa) 30%, var(--surface));
   --cat-1: #3987e5; --cat-2: #d95926; --cat-3: #199e70; --cat-4: #c98500;
   --cat-5: #d55181; --cat-6: #008300; --cat-7: #9085e9; --cat-8: #e66767;
+  --cat-9: #ae55c1; --cat-10: #85861f; --cat-11: #bf75af; --cat-12: #6e69f3; --cat-13: #3fad1e;
+  --cat-14: #01a2c5; --cat-15: #a167f1; --cat-16: #b36d2a; --cat-17: #dd56b8; --cat-18: #6887ff;
   --lateral: #17183a;
   --good-text: #2fc25b;
   --good-soft: #15291f;
@@ -593,6 +599,9 @@ code, .mono { font-family: ui-monospace, 'Cascadia Code', Consolas, monospace; f
 .rosca-centro { font-size: 21px; font-weight: 700; fill: var(--text); }
 .rosca-sub { font-size: 10.5px; fill: var(--muted); }
 .rosca-legenda { display: grid; gap: 2px; min-width: 0; }
+/* muitos tipos: legenda mais compacta para caber todos */
+.rosca-legenda.compacta { gap: 0; }
+.rosca-legenda.compacta .rosca-item { padding: 2px 8px; font-size: 12px; }
 .rosca-item { display: grid; grid-template-columns: 10px minmax(0, 1fr) auto; gap: 8px; align-items: center; border: 0; background: none; text-align: left; padding: 5px 8px; border-radius: 6px; cursor: pointer; color: var(--text-2); font-size: 13px; }
 .rosca-item:hover { background: var(--hover); color: var(--text); }
 .rosca-item .r-nome { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

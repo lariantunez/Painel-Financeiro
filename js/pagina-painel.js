@@ -10,6 +10,13 @@ import { valoresUsados, regraParaLinha } from './model.js';
 import { chaveDescricao, ehMarketplace } from './classifier.js';
 
 const COR_R = 'var(--receita)';
+// Análise mensal das receitas: uma série por pessoa (salário) e o resto junto
+const PESSOAS = ['LARISSA', 'DOUGLAS'];
+const SERIES_RECEITA = [
+  { nome: 'Salário Larissa', cor: COR_R, valor: (r) => r.salarios.LARISSA },
+  { nome: 'Salário Douglas', cor: 'var(--serie-b)', valor: (r) => r.salarios.DOUGLAS },
+  { nome: 'Outras receitas', cor: 'var(--serie-3)', valor: (r) => r.outras },
+];
 const COR_D = 'var(--despesa)';
 let abaTabela = 'despesas';
 let classificandoSemTipo = false;
@@ -175,10 +182,10 @@ export function renderPainel(raiz, app) {
   const serie = serieMeses(dados, fimGrafico, 12, filtros);
   const serieGeral = filtrado ? serieMeses(dados, fimGrafico, 12) : serie;
 
-  // Tipos: cores fixas pela posição no ano; rosca/anéis ignoram o filtro de tipo (o tipo escolhido fica destacado)
+  // Tipos: cada um com sua cor fixa (pelo histórico); rosca/anéis ignoram o filtro de tipo (o tipo escolhido fica destacado)
   const despesasAno = filtrarDespesas(totaisMes(dados, mesesDoAno(ano)).despesas, filtros, ['tipo']);
   const despesasPeriodo = filtrarDespesas(totaisMes(dados, meses).despesas, filtros, ['tipo']);
-  const paleta = coresDosTipos(despesasAno);
+  const paleta = coresDosTipos(despesasAno, dados.despesas);
 
   const semTipo = problemas.find((p) => p.semTipo)?.semTipo || [];
   raiz.innerHTML = `
@@ -214,7 +221,7 @@ export function renderPainel(raiz, app) {
 
     <section class="grade">
       <div class="card c-7">
-        <div class="card-titulo"><h2>Análise mensal das receitas · ${ano}</h2>${legenda([[COR_R, 'Salário'], ['var(--serie-3)', 'Outras receitas']])}</div>
+        <div class="card-titulo"><h2>Análise mensal das receitas · ${ano}</h2>${legenda(SERIES_RECEITA.map((s) => [s.cor, s.nome]))}</div>
         <div id="g-receitas"></div>
       </div>
       <div class="card c-5">
@@ -355,18 +362,18 @@ export function renderPainel(raiz, app) {
       )
     : '<div class="vazio">Sem despesas no ano.</div>';
 
-  // Receitas do ano: salário × outras
-  const rec = receitasDoAno(dados, ano);
+  // Receitas do ano: salário de cada um × outras
+  const rec = receitasDoAno(dados, ano, PESSOAS);
   responsivo($('#g-receitas', raiz), () =>
     graficoColunas($('#g-receitas', raiz), {
       rotulos: rec.map((r) => MESES[+r.mes.slice(5) - 1]),
-      series: [
-        { nome: 'Salário', cor: COR_R, valores: rec.map((r) => r.salario) },
-        { nome: 'Outras receitas', cor: 'var(--serie-3)', valores: rec.map((r) => r.outras) },
-      ],
+      series: SERIES_RECEITA.map((s) => ({ nome: s.nome, cor: s.cor, valores: rec.map(s.valor) })),
+      altura: 300,
       selecionado: rec.map((r, i) => (meses.includes(r.mes) ? i : -1)).filter((i) => i >= 0),
       onClick: (i, e) => clicarMes(app, rec[i].mes, e),
-      tooltip: (i) => `<div class="t-titulo">${nomeMes(rec[i].mes)}</div>${linhaTooltip(COR_R, 'Salário', moeda(rec[i].salario))}${linhaTooltip('var(--serie-3)', 'Outras receitas', moeda(rec[i].outras))}<div class="t-sep"></div>${linhaTooltip('', 'Total', moeda(rec[i].salario + rec[i].outras))}`,
+      tooltip: (i) =>
+        `<div class="t-titulo">${nomeMes(rec[i].mes)}</div>${SERIES_RECEITA.map((s) => linhaTooltip(s.cor, s.nome, moeda(s.valor(rec[i])))).join('')}` +
+        `<div class="t-sep"></div>${linhaTooltip('', 'Total', moeda(SERIES_RECEITA.reduce((t, s) => t + s.valor(rec[i]), 0)))}`,
     })
   );
 
@@ -374,7 +381,7 @@ export function renderPainel(raiz, app) {
   renderPorTipo($('#por-tipo', raiz), dados, meses, filtros);
   renderAPagar($('#a-pagar', raiz), aPagar, mes, app);
   renderComposicao($('#composicao', raiz), filtrarDespesas(totaisMes(dados, meses).despesas, filtros, ['categoria', 'recorrencia']));
-  renderParcelamentos($('#parcelamentos', raiz), filtrado ? { ...dados, despesas: filtrarDespesas(dados.despesas, filtros) } : dados, mes);
+  renderParcelamentos($('#parcelamentos', raiz), filtrado ? { ...dados, despesas: filtrarDespesas(dados.despesas, filtros, ['parcelasEm']) } : dados, mes, app);
   renderMaiores($('#maiores', raiz), t.despesas);
   ctxTabela = { app, tipos: valoresUsados(dados.despesas, 'tipo').sort((a, b) => a.localeCompare(b, 'pt-BR')) };
   renderTabela($('#tabela', raiz), t);
@@ -659,9 +666,12 @@ function renderComposicao(el, despesas) {
     ${divisao('categoria', fixo, 'FIXO', 'Fixo', 'var(--accent)', variavel, 'VARIAVEL', 'Variável')}`;
 }
 
-function renderParcelamentos(el, dados, mes) {
+function renderParcelamentos(el, dados, mes, app) {
   const p = parcelamentos(dados, mes);
-  el.innerHTML = `<div class="card-titulo"><h2>Parcelamentos no cartão</h2><span class="sub">${p.ativos.length} ativo(s) · ainda faltam <b class="num">${moeda(p.totalRestante)}</b></span></div>
+  // com o filtro "Parcelas em", a lista mostra só as compras que ainda terão parcela naquele mês
+  const parcelasEm = app.estado.filtros.parcelasEm?.valor;
+  const ativos = parcelasEm ? p.ativos.filter((a) => a.termina >= parcelasEm) : p.ativos;
+  el.innerHTML = `<div class="card-titulo"><h2>Parcelamentos no cartão</h2><span class="sub">${parcelasEm ? `${ativos.length} de ${p.ativos.length} ainda com parcela em ${escapeHtml(app.estado.filtros.parcelasEm.texto)} · clique na barra de novo para tirar` : `${p.ativos.length} ativo(s) · ainda faltam <b class="num">${moeda(p.totalRestante)}</b> · clique num mês para filtrar`}</span></div>
     <div id="g-parcelas"></div>
     <details class="secao" style="margin-top:8px" ${parcelasAbertas ? 'open' : ''}><summary>Ver compras parceladas</summary>
       <div class="tabela-wrap" id="tabela-parcelas"></div>
@@ -669,7 +679,7 @@ function renderParcelamentos(el, dados, mes) {
   const desenharParcelas = () => {
     const alvo = $('#tabela-parcelas', el);
     alvo.innerHTML = `<table class="tabela">${cabecalho(COLS_PARCELAS, ordem.parcelas)}<tbody>
-      ${ordenar(p.ativos, ordem.parcelas, VALOR_PARCELA).map((a) => `<tr><td><span class="filtravel ${ativoNoFiltro('despesa', serieDe(a.nome)) ? 'filtro-ativo' : ''}" ${filtravel('despesa', serieDe(a.nome), a.nome)}>${escapeHtml(a.nome)}</span><span class="desc-original">${escapeHtml(a.tipo)}</span></td><td class="tab">${a.k}/${a.n}</td><td class="num">${moeda(a.valor)}</td><td class="num">${moeda(a.restante)}</td><td>${nomeMes(a.termina, false)}</td></tr>`).join('') || '<tr><td colspan="5" class="vazio">Nenhum parcelamento ativo.</td></tr>'}
+      ${ordenar(ativos, ordem.parcelas, VALOR_PARCELA).map((a) => `<tr><td><span class="filtravel ${ativoNoFiltro('despesa', serieDe(a.nome)) ? 'filtro-ativo' : ''}" ${filtravel('despesa', serieDe(a.nome), a.nome)}>${escapeHtml(a.nome)}</span><span class="desc-original">${escapeHtml(a.tipo)}</span></td><td class="tab">${a.k}/${a.n}</td><td class="num">${moeda(a.valor)}</td><td class="num">${moeda(a.restante)}</td><td>${nomeMes(a.termina, false)}</td></tr>`).join('') || '<tr><td colspan="5" class="vazio">Nenhum parcelamento ativo.</td></tr>'}
       </tbody></table>`;
     ligarOrdenacao(alvo, COLS_PARCELAS, ordem.parcelas, desenharParcelas);
     atualizarBotaoLimpar(ctxTabela?.app.estado);
@@ -685,7 +695,14 @@ function renderParcelamentos(el, dados, mes) {
       rotulos: p.proximos.map((x) => MESES[+x.mes.slice(5) - 1]),
       series: [{ nome: 'Parcelas', cor: COR_D, valores: p.proximos.map((x) => x.valor) }],
       altura: 170,
-      tooltip: (i) => `<div class="t-titulo">${nomeMes(p.proximos[i].mes)}</div>${linhaTooltip(COR_D, 'Parcelas já assumidas', moeda(p.proximos[i].valor))}`,
+      selecionado: p.proximos.findIndex((x) => x.mes === parcelasEm),
+      onClick: (i) => {
+        const m = p.proximos[i].mes;
+        app.alternarFiltro('parcelasEm', m, `${MESES[+m.slice(5) - 1]}/${m.slice(2, 4)}`);
+      },
+      tooltip: (i) =>
+        `<div class="t-titulo">${nomeMes(p.proximos[i].mes)}</div>${linhaTooltip(COR_D, 'Parcelas já assumidas', moeda(p.proximos[i].valor))}` +
+        `<div class="t-sep"></div><div class="small">${p.proximos[i].mes === parcelasEm ? 'Clique para tirar o filtro' : 'Clique para ver as compras que ainda pesam neste mês'}</div>`,
     })
   );
 }

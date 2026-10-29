@@ -75,25 +75,39 @@ export function somarPor(lista, chave) {
   return m;
 }
 
-// Receitas de salário × outras receitas, mês a mês no ano
+// Receitas do ano mês a mês: salário de cada pessoa × outras receitas
+// O dono do salário vem do tipo ("Salário Douglas") e, se não estiver lá, da coluna NOME
 const ehSalario = (r) => /SALARIO|FERIAS|PLR|RESCISAO|DECIMO TERCEIRO|13O SALARIO/.test(rotulo(`${r.tipo}`));
-export function receitasDoAno(dados, ano) {
+export function donoDoSalario(r, pessoas) {
+  const tipo = rotulo(r.tipo);
+  return pessoas.find((p) => tipo.includes(p)) || pessoas.find((p) => rotulo(r.nome) === p) || '';
+}
+export function receitasDoAno(dados, ano, pessoas = []) {
   return mesesDoAno(ano).map((mes) => {
     const doMes = dados.receitas.filter((r) => r.mesRef === mes);
-    const salario = doMes.filter(ehSalario).reduce((s, r) => s + r.valor, 0);
-    return { mes, salario, outras: doMes.reduce((s, r) => s + r.valor, 0) - salario };
+    const salarios = Object.fromEntries(pessoas.map((p) => [p, 0]));
+    let outras = 0;
+    for (const r of doMes) {
+      const dono = ehSalario(r) && donoDoSalario(r, pessoas);
+      if (dono) salarios[dono] += r.valor;
+      else outras += r.valor;
+    }
+    return { mes, salarios, outras };
   });
 }
 
-// Cor de cada tipo pela posição no ano (fixa entre rosca, anéis e detalhamento; "Outros" depois dos 6 maiores)
+// Cor de cada tipo: fixa pelo gasto em todo o histórico (o mesmo tipo tem sempre a mesma cor, em qualquer ano)
+// "principais" = tipos com gasto no ano, do maior para o menor. Só passando de 17 tipos o resto vira "Outros"
 export const OUTROS = 'Outros';
-export function coresDosTipos(despesasDoAno, maximo = 6) {
-  const ranking = [...somarPor(despesasDoAno, tipoDe).entries()].filter(([, v]) => v > 0).sort((a, b) => b[1] - a[1]);
-  const cores = new Map(ranking.slice(0, maximo).map(([t], i) => [t, `var(--cat-${i + 1})`]));
-  return { cores, principais: ranking.slice(0, maximo).map(([t]) => t), corOutros: `var(--cat-${Math.min(maximo + 1, 8)})` };
+export const CORES_TIPO = 18;
+export function coresDosTipos(despesasDoAno, historico = despesasDoAno) {
+  const maximo = CORES_TIPO - 1;
+  const fixas = [...somarPor(historico, tipoDe).entries()].filter(([, v]) => v > 0).sort((a, b) => b[1] - a[1]).slice(0, maximo);
+  const cores = new Map(fixas.map(([t], i) => [t, `var(--cat-${i + 1})`]));
+  const principais = [...somarPor(despesasDoAno, tipoDe).entries()].filter(([t, v]) => v > 0 && cores.has(t)).sort((a, b) => b[1] - a[1]).map(([t]) => t);
+  return { cores, principais, corOutros: `var(--cat-${CORES_TIPO})` };
 }
 
-// Segmentos de rosca por tipo: os principais do ano + "Outros"
 export function segmentosPorTipo(despesas, { cores, corOutros }) {
   const somas = somarPor(despesas, tipoDe);
   const seg = [];
@@ -274,13 +288,21 @@ export const FILTROS = {
   recorrencia: { rotulo: 'Recorrência', valor: (d) => (d.recorrencia === 'MENSAL' ? 'MENSAL' : 'EVENTUAL') },
   forma: { rotulo: 'Forma', valor: (d) => d.forma || '' },
   status: { rotulo: 'Status', valor: (d) => rotulo(d.status) },
+  // compras parceladas que ainda terão parcela no mês escolhido (clique no gráfico de parcelamentos)
+  parcelasEm: { rotulo: 'Parcelas em', aceita: (d, mes) => !!d.mesRef && ehParcelado(d) && terminaEm(d) >= mes },
+};
+
+const ehParcelado = (d) => rotulo(d.forma).includes('PARCELADO') && (parseParcela(d.parcelas)?.n || 0) > 1;
+const terminaEm = (d) => {
+  const p = parseParcela(d.parcelas);
+  return somarMeses(d.mesRef, p.n - p.k);
 };
 
 // filtros: { campo: { valor, texto } } — "exceto" ignora alguns (ex.: o quadro de tipos não se filtra pelo tipo)
 export function filtrarDespesas(lista, filtros, exceto = []) {
   const ativos = Object.entries(filtros || {}).filter(([k, f]) => f && !exceto.includes(k) && FILTROS[k]);
   if (!ativos.length) return lista;
-  return lista.filter((d) => ativos.every(([k, f]) => FILTROS[k].valor(d) === f.valor));
+  return lista.filter((d) => ativos.every(([k, f]) => (FILTROS[k].aceita ? FILTROS[k].aceita(d, f.valor) : FILTROS[k].valor(d) === f.valor)));
 }
 
 export function totaisMes(dados, mes, filtros = null) {

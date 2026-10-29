@@ -12,7 +12,39 @@ import { toast, $, $$ } from './ui.js';
 const PASSOS = ['Arquivos', 'Contas do mês', 'Revisar', 'Enviar'];
 const INSTITUICOES = ['NUBANK', 'BRADESCO', 'ITAÚ', 'PORTO'];
 
-const imp = novoEstado();
+// ───────────── Rascunho: a importação em andamento fica salva no navegador ─────────────
+// (recarregar ou fechar a página não perde o que já foi preenchido)
+const CHAVE_RASCUNHO = 'pf3_rascunho_importacao';
+
+function restaurarRascunho() {
+  try {
+    const r = JSON.parse(localStorage.getItem(CHAVE_RASCUNHO));
+    if (!r || !(r.arquivos?.length || r.fixas)) return null;
+    return { ...r, selecionados: new Set(r.selecionados || []), resultado: null, enviando: false, restaurado: r.salvoEm };
+  } catch {
+    return null;
+  }
+}
+
+function salvarRascunho() {
+  try {
+    if (!importacaoEmAndamento() || imp.resultado) localStorage.removeItem(CHAVE_RASCUNHO);
+    else localStorage.setItem(CHAVE_RASCUNHO, JSON.stringify({ ...imp, selecionados: [...imp.selecionados], restaurado: null, salvoEm: Date.now() }));
+  } catch {
+    /* sem armazenamento disponível: segue sem rascunho */
+  }
+}
+
+const imp = restaurarRascunho() || novoEstado();
+
+// Aviso do navegador ao sair com importação preenchida e não enviada
+window.addEventListener('beforeunload', (e) => {
+  if (importacaoEmAndamento() && !imp.resultado) {
+    salvarRascunho();
+    e.preventDefault();
+    e.returnValue = '';
+  }
+});
 
 function novoEstado() {
   return {
@@ -26,6 +58,7 @@ function novoEstado() {
     enviando: false,
     tiposExtras: [],
     selecionados: new Set(),
+    restaurado: null,
   };
 }
 
@@ -43,6 +76,7 @@ export function renderImportar(raiz, app) {
   raiz.innerHTML = `
     <div class="cabecalho-pagina"><h1 style="font-size:22px;margin:0">Importar lançamentos</h1>
       ${importacaoEmAndamento() && !imp.resultado ? '<button class="btn btn-sm btn-ghost" id="recomecar">Recomeçar</button>' : ''}</div>
+    ${imp.restaurado ? `<div class="aviso info"><div><b>Importação restaurada.</b> Você continua de onde parou (salvo às ${new Date(imp.restaurado).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}). Para começar do zero, clique em “Recomeçar”.</div></div>` : ''}
     ${backendConfigurado() ? '' : '<div class="aviso info"><div><b>Modo sem conexão com a planilha.</b> Você pode importar e classificar normalmente; no final o painel copia as linhas prontas para você colar na planilha. Para gravar automaticamente, <a href="#/config">configure o backend</a>.</div></div>'}
     <nav class="passos">${PASSOS.map((p, i) => `<button class="passo ${i === imp.passo ? 'ativo' : ''} ${i < imp.passo ? 'feito' : ''}" data-passo="${i}" ${i > imp.passo || imp.resultado ? 'disabled' : ''}><span class="n">${i < imp.passo ? '✓' : i + 1}</span>${p}</button>`).join('')}</nav>
     <div id="conteudo-passo"></div>`;
@@ -52,6 +86,7 @@ export function renderImportar(raiz, app) {
     app.renderizar();
   });
   tela($('#conteudo-passo', raiz), app);
+  salvarRascunho();
 }
 
 function irPara(passo, app) {
@@ -299,11 +334,13 @@ function ligarLista(el, seletor, obter) {
         const c = campo.dataset.campo;
         item[c] = campo.type === 'checkbox' ? campo.checked : campo.value;
         if (c === 'incluir') linha.classList.toggle('desligada', !campo.checked);
+        salvarRascunho();
       });
     }
     for (const b of $$('.seg button', linha)) {
       b.addEventListener('click', () => {
         item.status = b.dataset.status;
+        salvarRascunho();
         $$('.seg button', linha).forEach((x) => x.classList.toggle('ativo', x === b));
       });
     }
@@ -582,6 +619,7 @@ function ligarRevisao(el, app) {
     } else l[c] = c === 'tipo' && l.destino === 'RECEITA' ? campo.value.trim() : campo.value;
 
     decidir(l);
+    salvarRascunho();
     // Mudanças estruturais redesenham; edição simples só atualiza o contador
     if (['destino', 'tipo', 'categoria', 'recorrencia', 'titular', 'incluir'].includes(c)) redesenhar(el, app);
     else atualizarPendencias(el);

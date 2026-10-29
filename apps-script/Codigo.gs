@@ -169,6 +169,9 @@ function anexar_(aba, linhas) {
   const valores = novas.map((l) => cab.map((c, j) => converter_(c, l[c], ref[j])));
 
   const inicio = ultima + 1;
+  // a aba pode não ter linhas vazias sobrando: cria as que faltam antes de gravar
+  const ultimaNecessaria = inicio + valores.length - 1;
+  if (aba.getMaxRows() < ultimaNecessaria) aba.insertRowsAfter(aba.getMaxRows(), ultimaNecessaria - aba.getMaxRows());
   const destino = aba.getRange(inicio, 1, valores.length, cab.length);
   garantirOpcoes_(aba, ultima, cab.length, valores);
   if (ultima > 1) {
@@ -230,7 +233,12 @@ function salvarRegras_(regras, excluir) {
     if (existente) aba.getRange(existente, 1, 1, cab.length).setValues([linha]);
     else novas.push(linha);
   });
-  if (novas.length) aba.getRange(aba.getLastRow() + 1, 1, novas.length, cab.length).setValues(novas);
+  if (novas.length) {
+    const inicioRegras = aba.getLastRow() + 1;
+    const falta = inicioRegras + novas.length - 1 - aba.getMaxRows();
+    if (falta > 0) aba.insertRowsAfter(aba.getMaxRows(), falta);
+    aba.getRange(inicioRegras, 1, novas.length, cab.length).setValues(novas);
+  }
 
   const apagar = excluir.map((c) => posicao.get(String(c))).filter(Boolean).sort((a, b) => b - a);
   apagar.forEach((l) => aba.deleteRow(l));

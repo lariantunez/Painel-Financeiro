@@ -1,15 +1,18 @@
 // Tela principal: visão do mês.
 
-import { moeda, pct, nomeMes, somarMeses, MESES, escapeHtml, rotulo, parseData, mesAtual } from './util.js';
+import { moeda, pct, nomeMes, somarMeses, MESES, escapeHtml, rotulo, parseData, mesAtual, RX_PARCELA } from './util.js';
 import { totaisMes, serieMeses, porTipo, fixoVariavel, contasAPagar, parcelamentos, maioresGastos, qualidade, tipoDe } from './analise.js';
 import { graficoColunas, responsivo, legenda, linhaTooltip, mostrarTooltip, esconderTooltip, toast, $, $$ } from './ui.js';
 import { backendConfigurado, enviar } from './api.js';
-import { valoresUsados } from './model.js';
+import { valoresUsados, regraParaLinha } from './model.js';
+import { chaveDescricao, ehMarketplace } from './classifier.js';
 
 const COR_R = 'var(--receita)';
 const COR_D = 'var(--despesa)';
 let abaTabela = 'despesas';
 let classificandoSemTipo = false;
+let editando = null; // linha da planilha em edição na tabela
+let ctxTabela = null;
 let busca = '';
 
 export function renderPainel(raiz, app) {
@@ -121,6 +124,7 @@ export function renderPainel(raiz, app) {
   renderFixoVariavel($('#fixo-variavel', raiz), totaisMes(dados, mes).despesas);
   renderParcelamentos($('#parcelamentos', raiz), dados, mes);
   renderMaiores($('#maiores', raiz), t.despesas);
+  ctxTabela = { app, tipos: valoresUsados(dados.despesas, 'tipo').sort((a, b) => a.localeCompare(b, 'pt-BR')) };
   renderTabela($('#tabela', raiz), t);
 
   for (const b of $$('[data-aba]', raiz)) {
@@ -375,15 +379,13 @@ function renderTabela(el, t) {
     return db.ano - da.ano || db.mes - da.mes || db.dia - da.dia;
   };
   if (abaTabela === 'despesas') {
-    const linhas = t.despesas.filter((d) => filtra([d.nome, d.tipo, d.forma, d.instituicao])).sort(ordenar);
+    const linhas = t.despesas.filter((d) => filtra([d.nome, d.tipo, d.forma, d.instituicao, d.descOriginal])).sort(ordenar);
+    const editavel = backendConfigurado();
     el.innerHTML = linhas.length
-      ? `<table class="tabela"><thead><tr><th>Data</th><th>Descrição</th><th>Tipo</th><th class="opc">Forma</th><th class="opc">Parcela</th><th class="opc">Status</th><th class="num">Valor</th></tr></thead><tbody>
-        ${linhas
-          .map(
-            (d) => `<tr><td class="tab">${escapeHtml(d.vencimento)}</td><td>${escapeHtml(d.nome)}${rotulo(d.categoria) === 'FIXO' ? ' <span class="badge">fixo</span>' : ''}</td><td>${escapeHtml(tipoDe(d))}</td><td class="text-2 opc">${escapeHtml(d.forma)}</td><td class="tab opc">${escapeHtml(d.parcelas && d.parcelas !== '1/1' ? d.parcelas : '')}</td><td class="opc">${statusBadge(d.status)}</td><td class="num">${moeda(d.valor)}</td></tr>`
-          )
-          .join('')}</tbody></table>`
+      ? `<table class="tabela"><thead><tr><th>Data</th><th>Descrição</th><th>Tipo</th><th class="opc">Forma</th><th class="opc">Parcela</th><th class="opc">Status</th><th class="num">Valor</th>${editavel ? '<th></th>' : ''}</tr></thead><tbody>
+        ${linhas.map((d) => (editavel && editando === d._linha ? linhaEmEdicao(d) : linhaDespesa(d, editavel))).join('')}</tbody></table>`
       : '<div class="vazio">Nenhuma despesa encontrada.</div>';
+    ligarEdicao(el, t, linhas);
   } else {
     const linhas = t.receitas.filter((r) => filtra([r.nome, r.tipo, r.instituicao]));
     el.innerHTML = linhas.length
@@ -391,6 +393,82 @@ function renderTabela(el, t) {
         ${linhas.map((r) => `<tr><td>${escapeHtml(r.nome)}</td><td>${escapeHtml(r.tipo)}</td><td class="text-2 opc">${escapeHtml(r.instituicao)}</td><td class="text-2 opc">${escapeHtml(r.forma)}</td><td class="num">${moeda(r.valor)}</td></tr>`).join('')}</tbody></table>`
       : '<div class="vazio">Nenhuma receita encontrada.</div>';
   }
+}
+
+function linhaDespesa(d, editavel) {
+  const desc = d.descOriginal && d.descOriginal !== d.nome ? `<span class="desc-original">${escapeHtml(d.descOriginal)}</span>` : '';
+  return `<tr><td class="tab">${escapeHtml(d.vencimento)}</td><td>${escapeHtml(d.nome)}${rotulo(d.categoria) === 'FIXO' ? ' <span class="badge">fixo</span>' : ''}${desc}</td>
+    <td>${escapeHtml(tipoDe(d))}</td><td class="text-2 opc">${escapeHtml(d.forma)}</td><td class="tab opc">${escapeHtml(d.parcelas && d.parcelas !== '1/1' ? d.parcelas : '')}</td>
+    <td class="opc">${statusBadge(d.status)}</td><td class="num">${moeda(d.valor)}</td>
+    ${editavel ? `<td class="acao-linha"><button class="btn btn-ghost btn-icone btn-sm" data-editar="${d._linha}" aria-label="Editar ${escapeHtml(d.nome)}" title="Renomear / mudar tipo">✎</button></td>` : ''}</tr>`;
+}
+
+function linhaEmEdicao(d) {
+  const tipos = ctxTabela.tipos;
+  return `<tr class="editando"><td class="tab">${escapeHtml(d.vencimento)}</td>
+    <td><input class="input input-sm" id="edit-nome" value="${escapeHtml(d.nome)}" aria-label="Nome da despesa">${d.descOriginal ? `<span class="desc-original">No banco: ${escapeHtml(d.descOriginal)}</span>` : ''}</td>
+    <td><select class="select select-sm" id="edit-tipo" aria-label="Tipo">${!d.tipo ? '<option value="">Escolha…</option>' : ''}${tipos.map((x) => `<option ${x === d.tipo ? 'selected' : ''}>${escapeHtml(x)}</option>`).join('')}</select></td>
+    <td class="text-2 opc">${escapeHtml(d.forma)}</td><td class="tab opc">${escapeHtml(d.parcelas && d.parcelas !== '1/1' ? d.parcelas : '')}</td><td class="opc">${statusBadge(d.status)}</td>
+    <td class="num">${moeda(d.valor)}</td>
+    <td class="acao-linha"><button class="btn btn-primario btn-sm" id="edit-salvar">Salvar</button> <button class="btn btn-ghost btn-sm" id="edit-cancelar" aria-label="Cancelar">✕</button></td></tr>`;
+}
+
+function ligarEdicao(el, t, linhas) {
+  for (const b of $$('[data-editar]', el)) {
+    b.addEventListener('click', () => {
+      editando = +b.dataset.editar;
+      renderTabela(el, t);
+      const input = $('#edit-nome', el);
+      input?.focus();
+      input?.select();
+    });
+  }
+  const d = linhas.find((x) => x._linha === editando);
+  if (!d || !$('#edit-salvar', el)) return;
+  const cancelar = () => {
+    editando = null;
+    renderTabela(el, t);
+  };
+  const salvar = async () => {
+    const nome = $('#edit-nome', el).value.trim();
+    const tipo = $('#edit-tipo', el).value;
+    const campos = {};
+    if (nome && nome !== d.nome) campos.NOME_DESPESA = nome;
+    if (tipo && tipo !== d.tipo) campos.TIPO = tipo;
+    if (!Object.keys(campos).length) return cancelar();
+    const botao = $('#edit-salvar', el);
+    botao.disabled = true;
+    botao.textContent = 'Salvando…';
+    try {
+      const r = await enviar('status', { alteracoes: [{ aba: 'despesas', linha: d._linha, nome: d.nome, campos }] });
+      if (r.erros?.length) throw new Error(r.erros[0]);
+      await ensinar(d, nome || d.nome, tipo || d.tipo);
+      Object.assign(d, { nome: nome || d.nome, tipo: tipo || d.tipo });
+      editando = null;
+      toast('Despesa atualizada na planilha');
+      ctxTabela.app.recarregar();
+    } catch (err) {
+      toast(err.message, 'erro', 6000);
+      botao.disabled = false;
+      botao.textContent = 'Salvar';
+    }
+  };
+  $('#edit-salvar', el).addEventListener('click', salvar);
+  $('#edit-cancelar', el).addEventListener('click', cancelar);
+  $('#edit-nome', el).addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') salvar();
+    if (e.key === 'Escape') cancelar();
+  });
+}
+
+// Despesa importada (fora de marketplace): o novo nome/tipo passa a valer nas próximas importações
+async function ensinar(d, nome, tipo) {
+  if (!d.descOriginal) return;
+  const chave = chaveDescricao(d.descOriginal);
+  if (!chave || ehMarketplace(chave)) return;
+  const atual = ctxTabela.app.estado.dados.regras.find((r) => r.chave === chave);
+  const base = atual || { chave, destino: 'DESPESA', categoria: d.categoria, titular: '', perguntar: false, usos: 1 };
+  await enviar('regras', { regras: [regraParaLinha({ ...base, nome: nome.replace(RX_PARCELA, '').trim(), tipo })] });
 }
 
 function statusBadge(status) {

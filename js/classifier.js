@@ -9,11 +9,19 @@ export const FORMAS = ['DÉBITO', 'CRÉDITO A VISTA', 'CRÉDITO PARCELADO', 'DÉ
 export const FORMAS_RECEITA = ['PIX', 'DEPÓSITO EM CONTA', 'DÉBITO EM CONTA'];
 export const CATEGORIAS = ['VARIÁVEL', 'FIXO'];
 
+// Marketplaces: o nome no extrato não diz o que foi comprado, então o painel sempre pergunta
+const MARKETPLACES = ['SHOPEE', 'AMAZON', 'AMAZONMKTPLC', 'MERCADOLIVRE', 'MERCADO LIVRE', 'ALIEXPRESS', 'MAGALU', 'SHEIN'];
+
+export function ehMarketplace(chave) {
+  const c = String(chave).replace(/^\+ /, '');
+  return MARKETPLACES.some((m) => c === m || c.startsWith(`${m} `));
+}
+
 const STOPWORDS = new Set(
   ('DE DA DO DOS DAS E EM NO NA COM POR PARA LTDA SA S A ME EIRELI EPP COMERCIO COM BR BRASIL MP PG PAG IFD EC DL DM PP MTZ HNA ' +
-    'PAGSEGURO PAYPAL EBANX PICPAY MERCADOPAGO NUPAY SUMUP STONE CIELO GETNET HTM IZ SQ LOJA LOJAS OSASCO SAO PAULO SP ' +
-    // marketplaces: a palavra não diz nada sobre o que foi comprado
-    'SHOPEE AMAZON AMAZONMKTPLC MERCADOLIVRE MERCADO LIVRE ALIEXPRESS MAGALU SHEIN').split(' ')
+    'PAGSEGURO PAYPAL EBANX PICPAY MERCADOPAGO NUPAY SUMUP STONE CIELO GETNET HTM IZ SQ LOJA LOJAS OSASCO SAO PAULO SP MERCADO LIVRE')
+    .split(' ')
+    .concat(MARKETPLACES)
 );
 
 // ───────────── Normalização da descrição do banco ─────────────
@@ -236,7 +244,13 @@ export function criarClassificador({ regras = [], despesas = [], receitas = [], 
 
     const sufixoParcela = parcela && lanc.forma === 'CRÉDITO PARCELADO' ? ` - Parcela ${parcela[1]}/${parcela[2]}` : '';
     const prefixoEstorno = estorno ? 'Estorno ' : '';
+    const marketplace = ehMarketplace(chave);
     const aplicar = (fonte, confianca, motivo) => {
+      // Em marketplace o nome/tipo anteriores são só sugestão: cada compra é um produto diferente
+      if (marketplace && confianca === 'certo') {
+        confianca = 'sugestao';
+        motivo = 'Compra em marketplace: confirme o que foi comprado';
+      }
       Object.assign(lanc, {
         destino: estorno ? 'DESPESA' : fonte.destino || lanc.destino,
         tipo: fonte.tipo || '',
@@ -244,7 +258,7 @@ export function criarClassificador({ regras = [], despesas = [], receitas = [], 
         confianca,
         motivo,
       });
-      if (fonte.nome) lanc.nome = lanc.destino === 'RECEITA' ? fonte.nome : prefixoEstorno + fonte.nome + sufixoParcela;
+      if (fonte.nome && !marketplace) lanc.nome = lanc.destino === 'RECEITA' ? fonte.nome : prefixoEstorno + fonte.nome + sufixoParcela;
       if (lanc.destino === 'RECEITA' && fonte.titular) lanc.titular = fonte.titular;
       return lanc;
     };
@@ -256,7 +270,7 @@ export function criarClassificador({ regras = [], despesas = [], receitas = [], 
       lanc.regra = regra;
       lanc.perguntar = regra.perguntar;
       return regra.perguntar
-        ? aplicar(regra, 'sugestao', 'Você pediu para sempre confirmar este lançamento')
+        ? aplicar(regra, 'sugestao', marketplace ? 'Compra em marketplace: confirme o que foi comprado' : 'Você pediu para sempre confirmar este lançamento')
         : aplicar(regra, 'certo', 'Regra aprendida');
     }
 
@@ -355,15 +369,16 @@ export function regrasAPartirDe(lancamentos) {
     const nome = (l.destino === 'RECEITA' ? l.tipo : l.nome).replace(RX_PARCELA, '').replace(/^Estorno\s+/i, '').trim();
     const anterior = l.regra;
     const mudou = anterior && (anterior.tipo !== l.tipo || anterior.destino !== l.destino);
+    const marketplace = ehMarketplace(l.chave);
     regras.set(l.chave, {
       chave: l.chave,
       destino: l.destino,
-      nome,
+      nome: marketplace ? '' : nome, // o nome dado a uma compra de marketplace vale só para ela
       tipo: l.destino === 'IGNORAR' ? '' : l.tipo,
       categoria: l.destino === 'IGNORAR' ? '' : l.categoria,
       titular: l.destino === 'RECEITA' ? l.titular : '',
       // Se uma regra já usada várias vezes foi contrariada, o lançamento é ambíguo: passa a perguntar sempre.
-      perguntar: l.perguntar !== undefined && l.editado ? l.perguntar : anterior ? anterior.perguntar || (mudou && anterior.usos >= 2) : false,
+      perguntar: marketplace || (l.perguntar !== undefined && l.editado ? l.perguntar : anterior ? anterior.perguntar || (mudou && anterior.usos >= 2) : false),
       usos: (anterior?.usos || 0) + 1,
     });
   }

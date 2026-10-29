@@ -159,6 +159,18 @@ if (pasta) {
     const ex = { ...lerExtrato(csv, 'Nubank.csv'), mesFatura: '2026-09' };
     assert.deepEqual(criarClassificador({ despesas, receitas }).classificarExtrato(ex).map((l) => l.mesRef), ['2026-09', '2026-09']);
   });
+  teste('Marketplace: nome dado não é memorizado e sempre pergunta', () => {
+    const csv = 'date,title,amount\n2026-09-27,Shopee *Kuangre,"25,90"';
+    const [l] = criarClassificador({ despesas, receitas }).classificarExtrato(lerExtrato(csv, 'Nubank.csv'));
+    Object.assign(l, { nome: 'Capinha de celular', tipo: 'ACESSÓRIOS', editado: true });
+    const [r] = regrasAPartirDe([l]);
+    assert.equal(r.nome, '');
+    assert.equal(r.perguntar, true);
+    const [l2] = criarClassificador({ despesas, receitas, regras: [r] }).classificarExtrato(lerExtrato(csv.replace('25,90', '99,00'), 'Nubank.csv'));
+    assert.equal(l2.confianca, 'sugestao');
+    assert.equal(l2.tipo, 'ACESSÓRIOS');
+    assert.notEqual(l2.nome, 'Capinha de celular');
+  });
   teste('Parcela seguinte com mesmo valor não é duplicata', () => {
     const l = criarClassificador({ despesas, receitas }).classificarExtrato(lerExtrato('date,title,amount\n2026-09-07,LIVELO - NuPay - Parcela 2/10,"299,48"', 'f.csv'))[0];
     assert.equal(l.possivelDuplicado, false);

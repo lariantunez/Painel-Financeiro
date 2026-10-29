@@ -318,6 +318,11 @@ table.tabela { width: 100%; border-collapse: collapse; font-size: 13px; }
 .tabela tbody tr:hover { background: var(--hover); }
 .tabela .direita { text-align: right; }
 .tabela .tab { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.tabela .acao-linha { width: 1%; white-space: nowrap; text-align: right; }
+.tabela .acao-linha [data-editar] { opacity: 0.35; }
+.tabela tr:hover .acao-linha [data-editar], .tabela .acao-linha [data-editar]:focus-visible { opacity: 1; }
+.tabela tr.editando { background: var(--accent-soft); }
+.tabela tr.editando .input { min-width: 180px; }
 .tabela td.num, .tabela th.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .tabela .desc-original { color: var(--muted); font-size: 11px; display: block; max-width: 340px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 

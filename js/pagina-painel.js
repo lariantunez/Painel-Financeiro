@@ -21,6 +21,7 @@ const COLS_DESPESAS = [
   { id: 'data', rotulo: 'Data', desc: true },
   { id: 'nome', rotulo: 'Descrição' },
   { id: 'tipo', rotulo: 'Tipo' },
+  { id: 'categoria', rotulo: 'Categoria', classe: 'opc' },
   { id: 'forma', rotulo: 'Forma', classe: 'opc' },
   { id: 'parcela', rotulo: 'Parcela', classe: 'opc' },
   { id: 'status', rotulo: 'Status', classe: 'opc' },
@@ -30,6 +31,7 @@ const VALOR_DESPESA = {
   data: (d) => dataOrdenavel(d.vencimento),
   nome: (d) => d.nome,
   tipo: (d) => d.tipo,
+  categoria: (d) => rotulo(d.categoria),
   forma: (d) => d.forma,
   parcela: (d) => (d.parcelas && d.parcelas !== '1/1' ? d.parcelas : ''),
   status: (d) => rotulo(d.status),
@@ -440,7 +442,7 @@ function renderTabela(el, t) {
       : '<div class="vazio">Nenhuma despesa encontrada.</div>';
     ligarOrdenacao(el, COLS_DESPESAS, ordem.despesas, redesenhar);
     ligarEdicao(el, t, linhas);
-    ligarStatus(el, t, linhas);
+    ligarSeletores(el, linhas);
   } else {
     const linhas = ordenar(t.receitas.filter((r) => filtra([r.nome, r.tipo, r.instituicao])), ordem.receitas, VALOR_RECEITA);
     el.innerHTML = linhas.length
@@ -451,32 +453,48 @@ function renderTabela(el, t) {
   }
 }
 
-// Status: lista de seleção (Pago / A pagar) que grava na planilha ao escolher
-function seletorStatus(d) {
-  const atual = rotulo(d.status);
-  const opcoes = [['PAGO', 'Pago'], ['A PAGAR', 'A pagar']];
-  if (atual && !opcoes.some(([v]) => v === atual)) opcoes.push([atual, d.status]);
-  const classe = atual === 'PAGO' ? 'pago' : atual === 'A PAGAR' ? 'a-pagar' : '';
-  return `<select class="status-sel ${classe}" data-status-linha="${d._linha}" aria-label="Status de ${escapeHtml(d.nome)}">
-    ${atual ? '' : '<option value="" selected>—</option>'}${opcoes.map(([v, r]) => `<option value="${escapeHtml(v)}" ${v === atual ? 'selected' : ''}>${escapeHtml(r)}</option>`).join('')}</select>`;
+// Listas de seleção na tabela (status e categoria): gravam na planilha ao escolher
+const SELETORES = {
+  status: {
+    coluna: 'STATUS',
+    opcoes: [['PAGO', 'Pago', 'pago'], ['A PAGAR', 'A pagar', 'a-pagar']],
+    aviso: (d, v) => `“${d.nome}” marcada como ${v === 'PAGO' ? 'paga' : 'a pagar'}`,
+  },
+  categoria: {
+    coluna: 'CATEGORIA',
+    opcoes: [['FIXO', 'Fixo', 'fixo'], ['VARIÁVEL', 'Variável', '']],
+    aviso: (d, v) => `“${d.nome}” agora é ${v === 'FIXO' ? 'fixa' : 'variável'}`,
+  },
+};
+
+function seletor(campo, d) {
+  const { opcoes } = SELETORES[campo];
+  const atual = rotulo(d[campo]);
+  const lista = opcoes.some(([v]) => rotulo(v) === atual) || !atual ? opcoes : [...opcoes, [d[campo], d[campo], '']];
+  const escolhida = lista.find(([v]) => rotulo(v) === atual);
+  return `<select class="status-sel ${escolhida?.[2] || ''}" data-sel-campo="${campo}" data-sel-linha="${d._linha}" aria-label="${campo === 'status' ? 'Status' : 'Categoria'} de ${escapeHtml(d.nome)}">
+    ${atual ? '' : '<option value="" selected>—</option>'}${lista.map(([v, r]) => `<option value="${escapeHtml(v)}" ${escolhida && v === escolhida[0] ? 'selected' : ''}>${escapeHtml(r)}</option>`).join('')}</select>`;
 }
 
-function ligarStatus(el, t, linhas) {
-  for (const s of $$('[data-status-linha]', el)) {
+function ligarSeletores(el, linhas) {
+  for (const s of $$('[data-sel-campo]', el)) {
     s.addEventListener('change', async () => {
-      const d = linhas.find((x) => x._linha === +s.dataset.statusLinha);
+      const campo = s.dataset.selCampo;
+      const { coluna, aviso } = SELETORES[campo];
+      const d = linhas.find((x) => x._linha === +s.dataset.selLinha);
+      const anterior = d[campo];
       const novo = s.value;
-      if (!novo || novo === rotulo(d.status)) return;
+      if (!novo || rotulo(novo) === rotulo(anterior)) return;
       s.disabled = true;
       try {
-        const r = await enviar('status', { alteracoes: [{ aba: 'despesas', linha: d._linha, nome: d.nome, campos: { STATUS: novo } }] });
+        const r = await enviar('status', { alteracoes: [{ aba: 'despesas', linha: d._linha, nome: d.nome, campos: { [coluna]: novo } }] });
         if (r.erros?.length) throw new Error(r.erros[0]);
-        d.status = novo;
-        toast(`“${d.nome}” marcada como ${novo === 'PAGO' ? 'paga' : 'a pagar'}`);
-        ctxTabela.app.renderizar(); // atualiza também "Contas a pagar"
+        d[campo] = novo;
+        toast(aviso(d, novo));
+        ctxTabela.app.renderizar(); // atualiza também os quadros (contas a pagar, fixo × variável)
       } catch (err) {
         toast(err.message, 'erro', 6000);
-        s.value = rotulo(d.status);
+        s.value = anterior;
         s.disabled = false;
       }
     });
@@ -485,9 +503,10 @@ function ligarStatus(el, t, linhas) {
 
 function linhaDespesa(d, editavel) {
   const desc = d.descOriginal && d.descOriginal !== d.nome ? `<span class="desc-original">${escapeHtml(d.descOriginal)}</span>` : '';
-  return `<tr><td class="tab">${escapeHtml(d.vencimento)}</td><td>${escapeHtml(d.nome)}${rotulo(d.categoria) === 'FIXO' ? ' <span class="badge">fixo</span>' : ''}${desc}</td>
-    <td>${escapeHtml(tipoDe(d))}</td><td class="text-2 opc">${escapeHtml(d.forma)}</td><td class="tab opc">${escapeHtml(d.parcelas && d.parcelas !== '1/1' ? d.parcelas : '')}</td>
-    <td class="opc">${editavel ? seletorStatus(d) : statusBadge(d.status)}</td><td class="num">${moeda(d.valor)}</td>
+  const categoria = editavel ? seletor('categoria', d) : escapeHtml(rotulo(d.categoria) === 'FIXO' ? 'Fixo' : d.categoria ? 'Variável' : '');
+  return `<tr><td class="tab">${escapeHtml(d.vencimento)}</td><td>${escapeHtml(d.nome)}${desc}</td>
+    <td>${escapeHtml(tipoDe(d))}</td><td class="opc">${categoria}</td><td class="text-2 opc">${escapeHtml(d.forma)}</td><td class="tab opc">${escapeHtml(d.parcelas && d.parcelas !== '1/1' ? d.parcelas : '')}</td>
+    <td class="opc">${editavel ? seletor('status', d) : statusBadge(d.status)}</td><td class="num">${moeda(d.valor)}</td>
     ${editavel ? `<td class="acao-linha"><button class="btn btn-ghost btn-icone btn-sm" data-editar="${d._linha}" aria-label="Editar ${escapeHtml(d.nome)}" title="Renomear / mudar tipo">✎</button></td>` : ''}</tr>`;
 }
 
@@ -498,7 +517,7 @@ function linhaEmEdicao(d) {
   return `<tr class="editando"><td class="tab">${escapeHtml(d.vencimento)}</td>
     <td><input class="input input-sm" id="edit-nome" value="${escapeHtml(d.nome)}" aria-label="Nome da despesa">${d.descOriginal ? `<span class="desc-original">No banco: ${escapeHtml(d.descOriginal)}</span>` : ''}${aviso}</td>
     <td><select class="select select-sm" id="edit-tipo" aria-label="Tipo">${!d.tipo ? '<option value="">Escolha…</option>' : ''}${tipos.map((x) => `<option ${x === d.tipo ? 'selected' : ''}>${escapeHtml(x)}</option>`).join('')}</select></td>
-    <td class="text-2 opc">${escapeHtml(d.forma)}</td><td class="tab opc">${escapeHtml(d.parcelas && d.parcelas !== '1/1' ? d.parcelas : '')}</td><td class="opc">${statusBadge(d.status)}</td>
+    <td class="text-2 opc">${escapeHtml(rotulo(d.categoria) === 'FIXO' ? 'Fixo' : 'Variável')}</td><td class="text-2 opc">${escapeHtml(d.forma)}</td><td class="tab opc">${escapeHtml(d.parcelas && d.parcelas !== '1/1' ? d.parcelas : '')}</td><td class="opc">${statusBadge(d.status)}</td>
     <td class="num">${moeda(d.valor)}</td>
     <td class="acao-linha"><button class="btn btn-primario btn-sm" id="edit-salvar">Salvar</button> <button class="btn btn-ghost btn-sm" id="edit-cancelar" aria-label="Cancelar">✕</button></td></tr>`;
 }

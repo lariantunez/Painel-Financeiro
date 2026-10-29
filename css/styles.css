@@ -335,6 +335,7 @@ table.tabela { width: 100%; border-collapse: collapse; font-size: 13px; }
 }
 .status-sel.pago { background-color: var(--good-soft); color: var(--good-text); border-color: transparent; }
 .status-sel.a-pagar { background-color: var(--warning-soft); color: var(--text); border-color: var(--warning); }
+.status-sel.fixo { background-color: var(--accent-soft); color: var(--accent); border-color: transparent; }
 .status-sel:hover { box-shadow: 0 0 0 1px var(--border-strong); }
 .status-sel:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 .status-sel:disabled { opacity: 0.5; cursor: wait; }

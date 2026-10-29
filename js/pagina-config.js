@@ -7,6 +7,17 @@ import { toast, $, $$ } from './ui.js';
 const INSTITUICOES = ['NUBANK', 'BRADESCO', 'ITAÚ', 'PORTO'];
 const URL_SCRIPT = 'https://github.com/lariantunez/Painel-Financeiro/blob/master/apps-script/Codigo.gs';
 
+function carregarScript(src) {
+  if (document.querySelector(`script[src="${src}"]`)) return Promise.resolve();
+  return new Promise((ok, falha) => {
+    const s = document.createElement('script');
+    s.src = src;
+    s.onload = ok;
+    s.onerror = () => falha(new Error('sem conexão com a internet'));
+    document.head.appendChild(s);
+  });
+}
+
 export function renderConfig(raiz, app) {
   const conectado = backendConfigurado();
   raiz.innerHTML = `
@@ -31,7 +42,12 @@ export function renderConfig(raiz, app) {
       </div>
       <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap">
         <button class="btn btn-primario" id="testar">Testar e salvar</button>
-        ${conectado ? '<button class="btn" id="desconectar">Desconectar</button><button class="btn" id="link">Copiar link para o celular</button>' : ''}
+        ${conectado ? '<button class="btn" id="desconectar">Desconectar</button><button class="btn" id="qr">Mostrar QR code para o celular</button><button class="btn" id="link">Copiar link para o celular</button>' : ''}
+      </div>
+      <div id="qr-area" hidden style="margin-top:14px;display:flex;gap:16px;align-items:center;flex-wrap:wrap">
+        <div id="qr-imagem" style="background:#fff;padding:10px;border-radius:10px;line-height:0"></div>
+        <div class="small text-2" style="max-width:340px;line-height:1.6"><b>Aponte a câmera do iPhone</b> para o código e toque no link que aparece: o painel abre no Safari já conectado.
+          Depois toque em <b>Compartilhar → Adicionar à Tela de Início</b>.<br><span class="muted">Não mostre este código para outras pessoas.</span></div>
       </div>
       ${
         conectado
@@ -81,6 +97,26 @@ export function renderConfig(raiz, app) {
     salvarConfig({ url: '', token: '' });
     app.recarregar();
     app.renderizar();
+  });
+  // QR code do link (biblioteca carregada só quando necessário)
+  $('#qr', raiz)?.addEventListener('click', async (e) => {
+    const area = $('#qr-area', raiz);
+    if (!area.hidden) {
+      area.hidden = true;
+      e.target.textContent = 'Mostrar QR code para o celular';
+      return;
+    }
+    try {
+      await carregarScript('https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js');
+      const qr = window.qrcode(0, 'M');
+      qr.addData(linkDeConfiguracao());
+      qr.make();
+      $('#qr-imagem', raiz).innerHTML = qr.createSvgTag({ cellSize: 5, margin: 0, scalable: false });
+      area.hidden = false;
+      e.target.textContent = 'Esconder QR code';
+    } catch (err) {
+      toast(`Não consegui gerar o QR code: ${err.message}`, 'erro', 6000);
+    }
   });
   $('#link', raiz)?.addEventListener('click', async () => {
     try {

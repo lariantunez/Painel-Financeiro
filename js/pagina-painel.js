@@ -645,32 +645,43 @@ function linhaDespesa(d, editavel) {
     <td class="opc">${editavel ? seletor('recorrencia', d) : texto('recorrencia')}</td>
     <td class="text-2 opc">${escapeHtml(d.forma)}</td><td class="tab opc">${escapeHtml(d.parcelas && d.parcelas !== '1/1' ? d.parcelas : '')}</td>
     <td class="opc">${editavel ? seletor('status', d) : statusBadge(d.status)}</td><td class="num">${moeda(d.valor)}</td>
-    ${editavel ? `<td class="acao-linha"><button class="btn btn-ghost btn-icone btn-sm" data-editar="${d._linha}" aria-label="Editar ${escapeHtml(d.nome)}" title="Editar nome, tipo e valor">✎</button></td>` : ''}</tr>`;
+    ${editavel ? `<td class="acao-linha"><button class="btn btn-ghost btn-icone btn-sm" data-editar="${d._linha}" aria-label="Editar ${escapeHtml(d.nome)}" title="Editar" aria-expanded="${editando === d._linha}">✎</button></td>` : ''}</tr>`;
 }
 
+// Edição: a linha continua visível e um painel abre logo abaixo, com espaço próprio para os campos
+// (não corta em telas menores e, no celular, dá acesso às colunas que ficam escondidas)
 function linhaEmEdicao(d) {
   const tipos = ctxTabela.tipos;
   const despesas = ctxTabela.app.estado.dados.despesas;
   const iguais = mesmaDespesa(despesas, d).length - 1;
   const seguintes = lancamentosSeguintes(despesas, d).length - 1;
+  const opcoes = (campo) => {
+    const atual = rotulo(d[campo]);
+    return `${atual ? '' : '<option value="">—</option>'}${SELETORES[campo].opcoes.map(([v, r]) => `<option value="${escapeHtml(v)}" ${rotulo(v) === atual ? 'selected' : ''}>${r}</option>`).join('')}`;
+  };
   const alcance = iguais > 0
-    ? `<span class="desc-original" style="color:var(--accent)" id="edit-alcance">Nome e tipo: este e mais ${iguais} lançamento(s) igual(is) · valor: este${seguintes ? ` e os ${seguintes} seguinte(s)` : ''}</span>
-       <label class="desc-original" style="display:flex;gap:6px;align-items:center;cursor:pointer"><input type="checkbox" id="edit-so"> Só neste lançamento</label>`
+    ? `<div class="edicao-alcance">Nome, tipo, categoria e recorrência: este e mais <b>${iguais}</b> lançamento(s) igual(is). Valor: este${seguintes ? ` e os <b>${seguintes}</b> seguinte(s)` : ''}. Status: só este.
+        <label><input type="checkbox" id="edit-so"> Só neste lançamento</label></div>`
     : '';
-  const texto = (campo) => escapeHtml(SELETORES[campo].opcoes.find(([v]) => rotulo(v) === rotulo(d[campo]))?.[1] || '');
-  return `<tr class="editando"><td class="tab">${escapeHtml(d.vencimento)}</td>
-    <td><input class="input input-sm" id="edit-nome" value="${escapeHtml(d.nome)}" aria-label="Nome da despesa">${d.descOriginal ? `<span class="desc-original">No banco: ${escapeHtml(d.descOriginal)}</span>` : ''}${alcance}</td>
-    <td><select class="select select-sm" id="edit-tipo" aria-label="Tipo">${!d.tipo ? '<option value="">Escolha…</option>' : ''}${tipos.map((x) => `<option ${x === d.tipo ? 'selected' : ''}>${escapeHtml(x)}</option>`).join('')}</select></td>
-    <td class="text-2 opc">${texto('categoria')}</td><td class="text-2 opc">${texto('recorrencia')}</td>
-    <td class="text-2 opc">${escapeHtml(d.forma)}</td><td class="tab opc">${escapeHtml(d.parcelas && d.parcelas !== '1/1' ? d.parcelas : '')}</td><td class="opc">${statusBadge(d.status)}</td>
-    <td class="num"><input class="input input-sm num" id="edit-valor" inputmode="decimal" style="width:100px;text-align:right" value="${d.valor.toFixed(2).replace('.', ',')}" aria-label="Valor"></td>
-    <td class="acao-linha"><button class="btn btn-primario btn-sm" id="edit-salvar">Salvar</button> <button class="btn btn-ghost btn-sm" id="edit-cancelar" aria-label="Cancelar">✕</button></td></tr>`;
+  return `${linhaDespesa(d, true).replace('<tr>', '<tr class="em-edicao">')}
+    <tr class="editando"><td colspan="${COLS_DESPESAS.length + 1}">
+      <div class="edicao">
+        <label class="campo edicao-nome">Nome<input class="input input-sm" id="edit-nome" value="${escapeHtml(d.nome)}">
+          ${d.descOriginal ? `<span class="dica">No banco: ${escapeHtml(d.descOriginal)}</span>` : ''}</label>
+        <label class="campo">Tipo<select class="select select-sm" id="edit-tipo">${!d.tipo ? '<option value="">Escolha…</option>' : ''}${tipos.map((x) => `<option ${x === d.tipo ? 'selected' : ''}>${escapeHtml(x)}</option>`).join('')}</select></label>
+        <label class="campo">Valor<input class="input input-sm num" id="edit-valor" inputmode="decimal" value="${d.valor.toFixed(2).replace('.', ',')}"></label>
+        <label class="campo">Categoria<select class="select select-sm" id="edit-categoria">${opcoes('categoria')}</select></label>
+        <label class="campo">Recorrência<select class="select select-sm" id="edit-recorrencia">${opcoes('recorrencia')}</select></label>
+        <label class="campo">Status<select class="select select-sm" id="edit-status">${opcoes('status')}</select></label>
+      </div>
+      <div class="edicao-rodape">${alcance}<div class="edicao-acoes"><button class="btn btn-sm" id="edit-cancelar">Cancelar</button><button class="btn btn-sm btn-primario" id="edit-salvar">Salvar</button></div></div>
+    </td></tr>`;
 }
 
 function ligarEdicao(el, t, linhas) {
   for (const b of $$('[data-editar]', el)) {
     b.addEventListener('click', () => {
-      editando = +b.dataset.editar;
+      editando = editando === +b.dataset.editar ? null : +b.dataset.editar;
       renderTabela(el, t);
       const input = $('#edit-nome', el);
       input?.focus();
@@ -687,13 +698,22 @@ function ligarEdicao(el, t, linhas) {
     const nome = $('#edit-nome', el).value.trim();
     const tipo = $('#edit-tipo', el).value;
     const valor = arred(parseValor($('#edit-valor', el).value));
+    const categoria = $('#edit-categoria', el).value;
+    const recorrencia = $('#edit-recorrencia', el).value;
+    const status = $('#edit-status', el).value;
     const so = $('#edit-so', el)?.checked;
-    const mudouNome = nome && nome !== d.nome;
-    const mudouTipo = tipo && tipo !== d.tipo;
-    const mudouValor = $('#edit-valor', el).value.trim() !== '' && Math.abs(valor - d.valor) > 0.004;
-    if (!mudouNome && !mudouTipo && !mudouValor) return cancelar();
+    const mudou = {
+      nome: nome && nome !== d.nome,
+      tipo: tipo && tipo !== d.tipo,
+      valor: $('#edit-valor', el).value.trim() !== '' && Math.abs(valor - d.valor) > 0.004,
+      categoria: categoria && rotulo(categoria) !== rotulo(d.categoria),
+      recorrencia: recorrencia && rotulo(recorrencia) !== rotulo(d.recorrencia),
+      status: status && rotulo(status) !== rotulo(d.status),
+    };
+    if (!Object.values(mudou).some(Boolean)) return cancelar();
 
-    // Nome e tipo: todos os lançamentos da mesma despesa. Valor: este e os seguintes (reajuste).
+    // Classificação (nome, tipo, categoria, recorrência): todos os lançamentos da mesma despesa.
+    // Valor: este e os seguintes (reajuste). Status: só este.
     const despesas = ctxTabela.app.estado.dados.despesas;
     const todos = so ? [d] : mesmaDespesa(despesas, d);
     const seguintes = so ? [d] : lancamentosSeguintes(despesas, d);
@@ -704,10 +724,13 @@ function ligarEdicao(el, t, linhas) {
     };
     for (const x of todos) {
       const novoNome = x === d && !RX_PARCELA.test(d.nome) ? nome : nomeDaParcela(nome, x);
-      if (mudouNome && novoNome !== x.nome) campos(x).NOME_DESPESA = novoNome;
-      if (mudouTipo && tipo !== x.tipo) campos(x).TIPO = tipo;
+      if (mudou.nome && novoNome !== x.nome) campos(x).NOME_DESPESA = novoNome;
+      if (mudou.tipo && tipo !== x.tipo) campos(x).TIPO = tipo;
+      if (mudou.categoria && rotulo(categoria) !== rotulo(x.categoria)) campos(x).CATEGORIA = categoria;
+      if (mudou.recorrencia && recorrencia !== x.recorrencia) campos(x).RECORRENCIA = recorrencia;
     }
-    if (mudouValor) for (const x of seguintes) if (Math.abs(x.valor - valor) > 0.004) campos(x).VALOR = valor;
+    if (mudou.valor) for (const x of seguintes) if (Math.abs(x.valor - valor) > 0.004) campos(x).VALOR = valor;
+    if (mudou.status) campos(d).STATUS = status;
     const alteracoes = [...porLinha].filter(([, c]) => Object.keys(c).length);
     if (!alteracoes.length) return cancelar();
 
@@ -718,8 +741,19 @@ function ligarEdicao(el, t, linhas) {
       const r = await enviar('status', { alteracoes: alteracoes.map(([x, c]) => ({ aba: 'despesas', linha: x._linha, nome: x.nome, campos: c })) });
       if (r.erros?.length && !r.alteradas) throw new Error(r.erros[0]);
       if (r.erros?.length) toast(`Alguns lançamentos não foram atualizados: ${r.erros[0]}`, 'erro', 8000);
-      if (!so && (mudouNome || mudouTipo)) await ensinar(d, { nome: nome || d.nome, tipo: tipo || d.tipo });
-      for (const [x, c] of alteracoes) Object.assign(x, { nome: c.NOME_DESPESA || x.nome, tipo: c.TIPO || x.tipo, valor: c.VALOR ?? x.valor });
+      if (!so && (mudou.nome || mudou.tipo || mudou.categoria || mudou.recorrencia)) {
+        await ensinar(d, { nome: nome || d.nome, tipo: tipo || d.tipo, categoria: categoria || d.categoria, recorrencia: recorrencia || d.recorrencia });
+      }
+      for (const [x, c] of alteracoes) {
+        Object.assign(x, {
+          nome: c.NOME_DESPESA || x.nome,
+          tipo: c.TIPO || x.tipo,
+          valor: c.VALOR ?? x.valor,
+          categoria: c.CATEGORIA || x.categoria,
+          recorrencia: c.RECORRENCIA || x.recorrencia,
+          status: c.STATUS || x.status,
+        });
+      }
       editando = null;
       toast(alteracoes.length > 1 ? `${alteracoes.length} lançamentos atualizados na planilha` : 'Despesa atualizada na planilha');
       ctxTabela.app.recarregar();
@@ -731,8 +765,8 @@ function ligarEdicao(el, t, linhas) {
   };
   $('#edit-salvar', el).addEventListener('click', salvar);
   $('#edit-cancelar', el).addEventListener('click', cancelar);
-  for (const campo of ['#edit-nome', '#edit-valor']) {
-    $(campo, el).addEventListener('keydown', (e) => {
+  for (const campo of $$('.edicao input:not([type=checkbox])', el)) {
+    campo.addEventListener('keydown', (e) => {
       if (e.key === 'Enter') salvar();
       if (e.key === 'Escape') cancelar();
     });

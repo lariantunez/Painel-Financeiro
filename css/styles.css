@@ -120,7 +120,7 @@ a { color: var(--accent); }
   border-bottom: 1px solid var(--border);
 }
 .topbar-inner {
-  max-width: 1200px;
+  max-width: 1600px;
   margin: 0 auto;
   padding: 10px 20px;
   display: flex;
@@ -147,7 +147,7 @@ a { color: var(--accent); }
 .sync-dot.carregando { background: var(--warning); animation: pulsar 1s infinite alternate; }
 @keyframes pulsar { to { opacity: 0.3; } }
 
-main { max-width: 1200px; margin: 0 auto; padding: 20px 20px 80px; }
+main { max-width: 1600px; margin: 0 auto; padding: 20px clamp(16px, 2.5vw, 32px) 80px; }
 
 /* ───────────── Elementos ───────────── */
 .btn {
@@ -379,8 +379,20 @@ table.tabela { width: 100%; border-collapse: collapse; font-size: 13px; }
 .tabela .acao-linha { width: 1%; white-space: nowrap; text-align: right; }
 .tabela .acao-linha [data-editar] { opacity: 0.35; }
 .tabela tr:hover .acao-linha [data-editar], .tabela .acao-linha [data-editar]:focus-visible { opacity: 1; }
-.tabela tr.editando { background: var(--accent-soft); }
-.tabela tr.editando .input { min-width: 180px; }
+/* edição de despesa: painel logo abaixo da linha */
+.tabela tr.em-edicao td { background: var(--accent-soft); border-bottom: 0; }
+.tabela tr.editando td { background: var(--accent-soft); padding: 4px 12px 14px; }
+.tabela tr.editando:hover { background: none; }
+.edicao { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px 12px; }
+.edicao .edicao-nome { grid-column: span 2; }
+.edicao .campo { font-size: 12px; color: var(--text-2); }
+.edicao .campo .dica { font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.edicao-rodape { display: flex; justify-content: space-between; align-items: flex-end; gap: 12px; margin-top: 10px; flex-wrap: wrap; }
+.edicao-alcance { font-size: 12px; color: var(--accent); flex: 1; min-width: 220px; line-height: 1.5; }
+.edicao-alcance label { display: flex; gap: 6px; align-items: center; color: var(--text-2); cursor: pointer; margin-top: 4px; }
+/* o painel de edição fica na largura visível, mesmo quando a tabela rola para o lado (celular) */
+.tabela tr.editando td > * { position: sticky; left: 0; max-width: calc(100vw - 2 * clamp(16px, 2.5vw, 32px) - 24px); }
+.edicao-acoes { display: flex; gap: 8px; margin-left: auto; }
 .tabela td.num, .tabela th.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .tabela .desc-original { color: var(--muted); font-size: 11px; display: block; max-width: 340px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
@@ -486,4 +498,6 @@ code, .mono { font-family: ui-monospace, 'Cascadia Code', Consolas, monospace; f
   .card { padding: 16px; }
   .tabela-wrap { margin: 0 -16px; padding: 0 16px; }
   .tabela .opc { display: none; }
+  .edicao { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .edicao .edicao-nome { grid-column: 1 / -1; }
 }

@@ -1,100 +1,60 @@
-# 💰 Painel Financeiro V2
+# Painel Financeiro
 
-Painel simples para análise de receitas e despesas por mês, com atualização automática em tempo real.
+Painel de receitas e despesas que lê e **alimenta sozinho** a planilha do Google Sheets a partir dos extratos do banco.
 
-## 🚀 Hospedagem no GitHub Pages
+Publicado em: https://lariantunez.github.io/Painel-Financeiro/
 
-Para rodar sem depender do PC:
+## Rotina mensal
 
-1. **Crie um repositório no GitHub** (ex: `painel-financeiro`)
-2. **Suba os arquivos**:
-   ```bash
-   git remote add origin https://github.com/SEU_USERNAME/painel-financeiro.git
-   git push -u origin master
-   ```
-3. **Habilite GitHub Pages**:
-   - Vá em Settings > Pages
-   - Source: Deploy from a branch
-   - Branch: master
-   - Salve
-4. **Acesse**: `https://SEU_USERNAME.github.io/painel-financeiro/`
+1. **Importar** → arraste a fatura do cartão e o extrato da conta (CSV do Nubank, OFX de qualquer banco ou CSV genérico).
+2. **Contas fixas** → o painel lista as fixas do mês com vencimento e parcela já calculados; você só confirma se ainda existe, o valor e se já pagou. Salários entram no mesmo passo.
+3. **Revisar** → só aparecem os lançamentos novos ou duvidosos. O que você decidir vale para todos os lançamentos iguais e fica memorizado para os próximos meses.
+4. **Enviar** → as linhas vão para a planilha. Cada importação pode ser desfeita.
 
-O painel fará polling automático a cada 30s para atualizar dados em tempo real!
+## Como o painel classifica
 
-## Estrutura esperada
+Para cada lançamento do extrato, nesta ordem:
 
-### Aba: DESPESAS
-- **Coluna A**: Nome da Despesa
-- **Coluna B**: Vencimento (formato: YYYY-MM-DD, ex: 2026-03-15)
-- **Coluna C**: Valor (numérico, ex: 150.00)
+| Etapa | Exemplo |
+|---|---|
+| Movimentos que não são gasto | Pagamento de fatura, caixinha/RDB → ignorados |
+| Continuação de parcelamento | "Amazon - Parcela 9/10" + parcela 8/10 já na planilha → copia nome e tipo |
+| Regra aprendida (aba `Regras`) | Tudo que você já classificou numa importação |
+| Histórico da planilha | "Netflix.Com" lançado 10× como ENTRETENIMENTO/FIXO |
+| Semelhança | "Carrefour Mercado" ≈ "Carrefour" → sugere e pede confirmação |
+| Novo | Pergunta para você |
 
-### Aba: RECEITAS
-- **Coluna A**: Nome (ex: Larissa, Douglas)
-- **Coluna B**: Tipo (ex: Salário, Freelancer, etc)
-- **Coluna C**: Valor (numérico, ex: 3000.00)
+Na tela **Aprendizado** dá para corrigir ou apagar regras e marcar lançamentos ambíguos (ex.: Pix para uma pessoa) como "perguntar sempre".
 
-## Como usar
+## Arquitetura
 
-### 1. Abrir o painel
-Rode um servidor local (importante para evitar `origin null`/CORS):
+- **Frontend** estático (GitHub Pages), JavaScript puro em módulos — sem build.
+- **Backend** em Google Apps Script ([`apps-script/Codigo.gs`](apps-script/Codigo.gs)) ligado à planilha: lê os dados, grava lançamentos sem duplicar (coluna `ID_IMPORTACAO`), guarda as regras na aba `Regras` e o histórico na aba `Importacoes`. Protegido por token — a planilha pode ficar privada.
+- Sem o backend o painel funciona em modo leitura (planilha pública) e a importação termina copiando as linhas para colar.
 
-- Python 3:
-  - `python -m http.server 8000`
-  - Acesse `http://localhost:8000`
-- ou `npm install -g serve && serve .`
-
-### 2. Selecionar mês/ano
-Use o campo "Mês/Ano" na seção de filtros para mudar o período de análise.
-
-### 3. Importar dados
-Clique em "📥 Importar do Google Sheets"
-
-Opções:
-- **A)** Informe o URL da planilha no campo “URL ou ID da Planilha” e o dashboard tentará ler as abas `Despesas` e `Receitas` automaticamente (precisa estar publicada/visível publicamente no Google Sheets para permitir fetch)
-- **B)** Cole o JSON no mesmo campo usando o formato acima para importação direta
-
-### Formato JSON esperado
-
-```json
-{
-  "despesas": [
-    {
-      "nomeDespesa": "Aluguel",
-      "vencimento": "2026-03-10",
-      "valor": 1500.00
-    },
-    {
-      "nomeDespesa": "Alimentação",
-      "vencimento": "2026-03-15",
-      "valor": 280.50
-    }
-  ],
-  "receitas": [
-    {
-      "nome": "Larissa",
-      "tipo": "Salário",
-      "valor": 3000.00
-    },
-    {
-      "nome": "Douglas",
-      "tipo": "Freelancer",
-      "valor": 1200.00
-    }
-  ]
-}
+```
+index.html
+css/styles.css
+js/
+  main.js               rotas e atualização automática
+  api.js                backend / planilha pública / cache local
+  parsers.js            leitura de CSV e OFX
+  classifier.js         classificação e aprendizado
+  fixas.js              checklist de contas fixas
+  analise.js            cálculos do painel
+  model.js, util.js     modelo de dados e utilitários
+  ui.js                 gráficos SVG, tooltip, avisos
+  pagina-*.js           telas
+apps-script/Codigo.gs   backend
+tests/teste-logica.mjs  testes (node tests/teste-logica.mjs [pasta-com-csvs])
 ```
 
-## Funcionalidades
+## Instalação do backend (uma vez)
 
-✅ **Cards principais**: Receita, Despesa e Saldo
-✅ **Filtro por Mês/Ano**: Análise mês a mês
-✅ **2 Abas**: Despesas e Receitas separadas
-✅ **Armazenamento local**: LocalStorage (persiste dados no navegador)
-✅ **Design responsivo**: Funciona em desktop e mobile
+Passo a passo dentro do próprio painel em **Configurações**. Resumo: colar `Codigo.gs` em Extensões → Apps Script, executar `configurar`, implantar como App da Web e colar URL + token no painel.
 
-## Próximas etapas (conforme solicitado)
+## Rodar localmente
 
-- Integração direta com Google Sheets API
-- Gráficos de evolução mensal
-- Categorização de despesas
-- Relatório comparativo (mês anterior)
+```bash
+python -m http.server 8000   # abra http://localhost:8000
+```

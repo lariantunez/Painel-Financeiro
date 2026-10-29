@@ -2,133 +2,31 @@
 <html lang="pt-BR">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Painel Financeiro - Receitas e Despesas</title>
-  <link rel="stylesheet" href="styles.css" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>Painel Financeiro</title>
+  <meta name="theme-color" content="#f6f6f4" />
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%232a78d6'/%3E%3Cpath d='M9 22V14M16 22V9M23 22v-5' stroke='white' stroke-width='3' stroke-linecap='round'/%3E%3C/svg%3E" />
+  <link rel="stylesheet" href="css/styles.css" />
 </head>
 <body>
-  <div class="container">
-    <!-- HEADER -->
-    <header class="header">
-      <h1>💰 Painel Financeiro</h1>
-      <p class="subtitle">Análise de Receitas e Despesas</p>
-    </header>
+  <header class="topbar">
+    <div class="topbar-inner">
+      <div class="brand"><span class="brand-dot"></span>Painel Financeiro</div>
+      <nav class="nav">
+        <a href="#/painel" data-rota="painel">Painel</a>
+        <a href="#/importar" data-rota="importar">Importar</a>
+        <a href="#/aprendizado" data-rota="aprendizado">Aprendizado</a>
+        <a href="#/config" data-rota="config">Configurações</a>
+      </nav>
+      <button class="sync btn btn-ghost btn-sm" id="btn-atualizar" title="Atualizar agora">
+        <span class="sync-dot"></span><span class="sync-texto">Carregando…</span>
+      </button>
+    </div>
+  </header>
 
-    <!-- FILTRO ANO/MÊS -->
-    <section class="filter-section">
-      <div class="year-select-group">
-        <label for="year-select">Ano:</label>
-        <select id="year-select" class="year-select"></select>
-      </div>
-      <div class="month-buttons" id="month-buttons"></div>
-    </section>
+  <main id="app"></main>
 
-    <!-- CARDS PRINCIPAIS -->
-    <section class="cards-section">
-      <div class="card card-receita">
-        <div class="card-label">💵 Receitas</div>
-        <div class="card-value" id="total-receita">R$ 0,00</div>
-        <div class="card-info" id="info-receita">-</div>
-      </div>
-
-      <div class="card card-despesa">
-        <div class="card-label">💸 Despesas</div>
-        <div class="card-value" id="total-despesa">R$ 0,00</div>
-        <div class="card-info" id="info-despesa">-</div>
-      </div>
-
-      <div class="card card-saldo">
-        <div class="card-label">📊 Saldo</div>
-        <div class="card-value" id="total-saldo">R$ 0,00</div>
-        <div class="card-info" id="info-saldo">-</div>
-      </div>
-    </section>
-
-    <!-- GRÁFICO MÊSES -->
-    <section class="chart-section">
-      <div class="chart-title">Visão Mensal (Receitas vs Despesas)</div>
-      <div class="chart-wrapper-scroll"><div class="chart-wrapper" id="chart-wrapper"></div></div>
-    </section>
-
-    <!-- GRÁFICO CATEGORIAS -->
-    <section class="chart-section">
-      <div style="display:flex;align-items:center;gap:12px;margin-bottom:4px;">
-        <div class="chart-title" style="margin-bottom:0;">Despesas por Categoria</div>
-        <div id="filtro-categoria-chip" style="display:none;"></div>
-      </div>
-      <div class="categoria-chart-wrapper" id="categoria-chart-wrapper"></div>
-    </section>
-
-    <!-- GRÁFICO PARCELADOS -->
-    <section class="chart-section" id="section-parcelados">
-      <div class="chart-title">💳 Projeção de Parcelas no Cartão</div>
-      <div class="chart-wrapper-scroll"><div id="parcelados-chart-wrapper"></div></div>
-    </section>
-
-    <!-- ÁREA DE DADOS -->
-    <section class="data-section">
-      <div class="tabs">
-        <button class="tab-btn active" data-tab="despesas">📋 Despesas</button>
-        <button class="tab-btn" data-tab="receitas">💰 Receitas</button>
-        <button class="tab-btn" data-tab="parcelamentos">💳 Parcelamentos</button>
-      </div>
-
-      <!-- TAB: DESPESAS -->
-      <div class="tab-content active" id="tab-despesas">
-        <table class="data-table">
-          <thead>
-            <tr>
-              <th>Nome da Despesa</th>
-              <th>Vencimento</th>
-              <th>Valor</th>
-              <th>Parcelas</th>
-              <th>Tipo</th>
-            </tr>
-          </thead>
-          <tbody id="tbody-despesas">
-            <tr><td colspan="3" style="text-align:center;color:#999;">Nenhuma despesa carregada</td></tr>
-          </tbody>
-        </table>
-      </div>
-
-      <!-- TAB: RECEITAS -->
-      <div class="tab-content" id="tab-receitas">
-        <table class="data-table">
-          <thead>
-            <tr>
-              <th>Nome</th>
-              <th>Tipo</th>
-              <th>Valor</th>
-            </tr>
-          </thead>
-          <tbody id="tbody-receitas">
-            <tr><td colspan="3" style="text-align:center;color:#999;">Nenhuma receita carregada</td></tr>
-          </tbody>
-        </table>
-      </div>
-      <!-- TAB: PARCELAMENTOS -->
-      <div class="tab-content" id="tab-parcelamentos">
-        <table class="data-table">
-          <thead>
-            <tr>
-              <th>Nome da Despesa</th>
-              <th>Vencimento</th>
-              <th>Valor</th>
-              <th>Parcelas</th>
-              <th>Tipo</th>
-            </tr>
-          </thead>
-          <tbody id="tbody-parcelamentos">
-            <tr><td colspan="5" style="text-align:center;color:#999;">Nenhum parcelamento carregado</td></tr>
-          </tbody>
-        </table>
-      </div>
-    </section>
-
-    <!-- STATUS -->
-    <div id="status-message" class="status-message"></div>
-  </div>
-
-  <script src="app.js"></script>
+  <noscript>Este painel precisa de JavaScript.</noscript>
+  <script type="module" src="js/main.js"></script>
 </body>
 </html>

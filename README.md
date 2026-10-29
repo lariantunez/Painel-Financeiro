@@ -15,6 +15,7 @@ Publicado em: https://lariantunez.github.io/Painel-Financeiro/
 
 - **Painel** — período de um ou vários meses: receitas, despesas, saldo, tipos, composição (mensal × eventual, fixo × variável), contas a pagar, parcelamentos e lançamentos editáveis (nome, tipo, valor, categoria, recorrência, status).
 - **Previsão** — próximos 6/12 meses: contas mensais (último valor) + parcelas restantes × receitas previstas.
+- **Análise** — últimos 6/12 meses fechados: nota de saúde financeira, pontos críticos, para onde vai o dinheiro (Pareto, 50/30/20), renda por pessoa, oportunidades de economia, cenários de 5 anos, reserva de emergência, teste de estresse, estratégia de investimentos e sazonalidade. Cálculos em `js/financas.js`; reserva, taxas e perfil ficam no navegador.
 - **Importar** — extratos + contas do mês + revisão.
 - **Aprendizado** — regras memorizadas.
 

@@ -8,6 +8,7 @@ import { criarClassificador, chaveDescricao, paraLinhasPlanilha, regrasAPartirDe
 import { normalizarDespesa, normalizarReceita } from '../js/model.js';
 import { montarFixas, fixasParaLinhas } from '../js/fixas.js';
 import { parseValor, parseMesRef } from '../js/util.js';
+import { analisarFinancas, valorFuturo, taxaReal, cenario } from '../js/financas.js';
 import { parcelasDaMesmaCompra, nomeDaParcela, mesmaDespesa, lancamentosSeguintes, inferirRecorrencia, previsao } from '../js/analise.js';
 
 let ok = 0;
@@ -21,6 +22,32 @@ const teste = (nome, fn) => {
     process.exitCode = 1;
   }
 };
+
+console.log('análise financeira');
+teste('Juros compostos e taxa real', () => {
+  assert.equal(Math.round(valorFuturo(100, 12, 0)), 1200);
+  assert.ok(Math.abs(valorFuturo(1000, 120, 0.12) - 225000) < 5000); // ~R$ 225 mil
+  assert.ok(Math.abs(taxaReal(0.12, 0.045) - 0.0718) < 0.001);
+});
+teste('Reembolso abate gasto (não é renda); salário vai para a pessoa; financiamento conta como dívida', () => {
+  const d = (nome, valor, extra = {}) => ({ nome, valor, mesRef: '2026-01', tipo: 'CASA', categoria: 'FIXO', recorrencia: 'MENSAL', forma: 'BOLETO', parcelas: '', ...extra });
+  const r = (tipo, nome, valor) => ({ tipo, nome, valor, mesRef: '2026-01' });
+  const dados = {
+    despesas: [d('Financiamento Apartamento', 3000, { parcelas: '40/415' }), d('Cinema', 200, { tipo: 'LAZER', categoria: 'VARIÁVEL', recorrencia: 'EVENTUAL', forma: 'DÉBITO' })],
+    receitas: [r('Salario Douglas', 'DOUGLAS', 5000), r('SALÁRIO', 'LARISSA', 3000), r('REEMBOLSO', 'LARISSA', 100)],
+  };
+  const a = analisarFinancas(dados, { meses: 1, fim: '2026-01' });
+  assert.equal(a.m.renda, 8000);
+  assert.equal(a.m.gasto, 3100);
+  assert.equal(a.m.saldo, 4900);
+  assert.deepEqual(a.salarioPessoa, { LARISSA: 3000, DOUGLAS: 5000 });
+  assert.equal(a.m.financiamentos, 3000);
+  assert.equal(a.financiamentos[0].restantes, 375);
+  assert.equal(a.alertas.find((x) => x.titulo === 'Os gastos estão maiores que a renda'), undefined);
+  // sem juros nem inflação, o patrimônio cresce exatamente a sobra de cada mês
+  const pts = cenario({ ...a, taxaAnual: 0, inflacao: 0 }, { meses: 3 });
+  assert.deepEqual(pts.map(Math.round), [0, 4900, 9800, 14700]);
+});
 
 console.log('util');
 teste('parseValor BR/US/negativo', () => {

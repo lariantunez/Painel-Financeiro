@@ -79,9 +79,9 @@ export function sparkline(container, valores, cor, { altura = 54 } = {}) {
 }
 
 // ───────────── Linhas suaves com área ─────────────
-// opcoes: { rotulos[], series:[{nome, cor, valores[]}], selecionados[], tooltip(i), onClick(i, e), altura }
+// opcoes: { rotulos[], series:[{nome, cor, valores[]}], selecionados[], tooltip(i), onClick(i, e), altura, area (preenche abaixo da linha) }
 export function linhasSuaves(container, opcoes) {
-  const { rotulos, series, selecionados = [], tooltip, onClick, altura = 240 } = opcoes;
+  const { rotulos, series, selecionados = [], tooltip, onClick, altura = 240, area = true } = opcoes;
   const largura = Math.max(300, container.clientWidth || 600);
   const mg = { t: 10, r: 10, b: 26, l: 52 };
   const plotW = largura - mg.l - mg.r;
@@ -92,6 +92,7 @@ export function linhasSuaves(container, opcoes) {
   const banda = plotW / rotulos.length;
   const x = (i) => mg.l + banda * i + banda / 2;
   const marcados = new Set(selecionados);
+  const passoRotulo = Math.max(1, Math.ceil(44 / banda));
 
   let svg = `<svg viewBox="0 0 ${largura} ${altura}" height="${altura}" width="100%" role="img" style="display:block;overflow:visible"><defs>`;
   const ids = series.map((s) => {
@@ -112,13 +113,13 @@ export function linhasSuaves(container, opcoes) {
   series.forEach((s, j) => {
     const pts = s.valores.map((v, i) => [x(i), y(v)]);
     const linha = caminhoSuave(pts);
-    svg += `<path d="${linha}L${pts[pts.length - 1][0]},${y(Math.max(0, base))}L${pts[0][0]},${y(Math.max(0, base))}Z" fill="url(#${ids[j]})"/>`;
+    if (area) svg += `<path d="${linha}L${pts[pts.length - 1][0]},${y(Math.max(0, base))}L${pts[0][0]},${y(Math.max(0, base))}Z" fill="url(#${ids[j]})"/>`;
     svg += `<path d="${linha}" fill="none" style="stroke:${s.cor}" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>`;
   });
   // áreas de clique/hover por mês (guia e pontos aparecem no hover)
   rotulos.forEach((rot, i) => {
     const ativo = marcados.has(i);
-    const pular = banda < 40 && i % 2 !== (rotulos.length - 1) % 2 && !ativo; // pouco espaço: meses alternados
+    const pular = (rotulos.length - 1 - i) % passoRotulo !== 0 && !ativo; // pouco espaço: só um rótulo a cada tantos meses
     svg += `<g class="alvo-linha" data-i="${i}"><rect x="${mg.l + banda * i}" y="${mg.t}" width="${banda}" height="${plotH + mg.b}" fill="transparent"/>
       <line class="guia" x1="${x(i)}" x2="${x(i)}" y1="${mg.t}" y2="${mg.t + plotH}" stroke="var(--axis)" stroke-width="1"/>
       ${series.map((s) => `<circle class="ponto" cx="${x(i)}" cy="${y(s.valores[i])}" r="4.5" style="fill:${s.cor};stroke:var(--surface)" stroke-width="2"/>`).join('')}

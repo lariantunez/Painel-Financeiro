@@ -71,7 +71,7 @@ export function renderPrevisao(raiz, app) {
 
   responsivo($('#g-previsao', raiz), () =>
     graficoColunas($('#g-previsao', raiz), {
-      rotulos: meses.map((m) => MESES[+m.mes.slice(5) - 1] + (m.mes.endsWith('-01') ? ` ${m.mes.slice(2, 4)}` : '')),
+      rotulos: meses.map((m) => `${MESES[+m.mes.slice(5) - 1]}/${m.mes.slice(2, 4)}`), // previsão: sempre com o ano
       series: [
         { nome: 'Contas mensais', cor: COR_MENSAL, valores: meses.map((m) => m.mensais), pilha: 'gasto' },
         { nome: 'Parcelas', cor: COR_PARCELA, valores: meses.map((m) => m.parcelas), pilha: 'gasto' },

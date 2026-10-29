@@ -537,8 +537,8 @@ function renderComposicao(el, despesas) {
       <div class="legenda" style="justify-content:space-between;margin-bottom:12px">${item(valA, corA, rotA, a)}${item(valB, 'var(--neutro)', rotB, b)}</div>`;
   };
   el.innerHTML = `<div class="card-titulo"><h2>Composição das despesas</h2><span class="sub">clique para filtrar</span></div>
-    ${divisao('recorrencia', mensal, 'MENSAL', 'Mensal', 'var(--receita)', total - mensal, 'EVENTUAL', 'Eventual')}
-    ${divisao('categoria', fixo, 'FIXO', 'Fixo', 'var(--receita)', variavel, 'VARIAVEL', 'Variável')}`;
+    ${divisao('recorrencia', mensal, 'MENSAL', 'Mensal', 'var(--accent)', total - mensal, 'EVENTUAL', 'Eventual')}
+    ${divisao('categoria', fixo, 'FIXO', 'Fixo', 'var(--accent)', variavel, 'VARIAVEL', 'Variável')}`;
 }
 
 function renderParcelamentos(el, dados, mes) {

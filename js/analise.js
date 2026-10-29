@@ -2,8 +2,49 @@
 
 import { rotulo, somarMeses, parseParcela, RX_PARCELA, mesAtual } from './util.js';
 import { serieDe } from './fixas.js';
+import { chaveDescricao } from './classifier.js';
 
 export const SEM_TIPO = 'Sem tipo';
+
+// Número da parcela: o que está no nome ("Parcela 7/10") vale mais que a coluna PARCELAS
+function parcelaDe(d) {
+  const m = d.nome.match(RX_PARCELA);
+  return m ? { k: +m[1], n: +m[2] } : parseParcela(d.parcelas);
+}
+
+const mesesEntre = (a, b) => {
+  const [a1, m1] = a.split('-').map(Number);
+  const [a2, m2] = b.split('-').map(Number);
+  return (a2 - a1) * 12 + (m2 - m1);
+};
+
+// Todas as parcelas da mesma compra (inclui a própria). Precisam ter o mesmo nº de parcelas e o
+// mesmo valor, e ainda: mesmo nome base, ou mesma descrição do banco, ou datas coerentes com a
+// numeração (a parcela 1/10 fica 7 meses antes da 8/10)
+export function parcelasDaMesmaCompra(despesas, d) {
+  const p = parcelaDe(d);
+  if (!p || p.n <= 1) return [d];
+  const serie = serieDe(d.nome);
+  const chave = d.descOriginal ? chaveDescricao(d.descOriginal) : '';
+  return despesas.filter((x) => {
+    if (x === d) return true;
+    const px = parcelaDe(x);
+    // tolerância: a 1ª parcela costuma absorver os centavos do arredondamento (138,48 x 138,40)
+    const tolerancia = Math.max(0.15, Math.abs(d.valor) * 0.01);
+    if (!px || px.n !== p.n || Math.abs(Math.abs(x.valor) - Math.abs(d.valor)) > tolerancia) return false;
+    if (serieDe(x.nome) === serie) return true;
+    if (chave && x.descOriginal && chaveDescricao(x.descOriginal) === chave) return true;
+    return Boolean(x.mesRef && d.mesRef) && Math.abs(mesesEntre(d.mesRef, x.mesRef) - (px.k - p.k)) <= 1;
+  });
+}
+
+// Novo nome para uma parcela, mantendo o "- Parcela k/n" de cada uma
+export function nomeDaParcela(nomeNovo, parcela) {
+  const base = nomeNovo.replace(RX_PARCELA, '').replace(/\s+-\s*$/, '').trim();
+  const p = parcelaDe(parcela);
+  const usaSufixo = RX_PARCELA.test(parcela.nome) || (rotulo(parcela.forma).includes('PARCELADO') && p);
+  return usaSufixo ? `${base} - Parcela ${p.k}/${p.n}` : base;
+}
 export const tipoDe = (d) => d.tipo || SEM_TIPO;
 
 const doMes = (lista, mes) => lista.filter((l) => l.mesRef === mes);

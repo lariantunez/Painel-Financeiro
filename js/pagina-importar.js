@@ -3,6 +3,7 @@
 import { lerExtrato } from './parsers.js';
 import { criarClassificador, propagarDecisao, regrasAPartirDe, paraLinhasPlanilha, FORMAS, FORMAS_RECEITA, CATEGORIAS } from './classifier.js';
 import { montarFixas, fixasParaLinhas, serieDe } from './fixas.js';
+import { parcelasDaMesmaCompra, nomeDaParcela } from './analise.js';
 import { valoresUsados, regraParaLinha } from './model.js';
 import { moeda, nomeMes, mesAtual, somarMeses, escapeHtml, parseValor, parseData, dataBR, arred, rotulo } from './util.js';
 import { backendConfigurado, enviar, config, salvarRegrasLocais } from './api.js';
@@ -602,7 +603,24 @@ function atualizarPendencias(el) {
 
 // ═════════════════════════ Passo 4 — Enviar ═════════════════════════
 
-function montarEnvio() {
+// Parcela renomeada (ou com tipo trocado) na revisão: as parcelas anteriores da mesma compra acompanham
+function renomearParcelasAnteriores(dados) {
+  const alteracoes = [];
+  for (const l of imp.lancamentos) {
+    const ant = l.anteriorParcela;
+    if (!ant || !l.editado || l.excluir || l.jaLancado || l.destino !== 'DESPESA') continue;
+    for (const x of parcelasDaMesmaCompra(dados.despesas, ant)) {
+      const campos = {};
+      const nome = nomeDaParcela(l.nome, x);
+      if (nome !== x.nome) campos.NOME_DESPESA = nome;
+      if (l.tipo && l.tipo !== x.tipo) campos.TIPO = l.tipo;
+      if (Object.keys(campos).length) alteracoes.push({ aba: 'despesas', linha: x._linha, nome: x.nome, campos });
+    }
+  }
+  return alteracoes;
+}
+
+function montarEnvio(dados) {
   const lanc = paraLinhasPlanilha(imp.lancamentos);
   const fixas = imp.fixas ? fixasParaLinhas({ ...imp.fixas, despesas: [...imp.fixas.despesas, ...imp.novasFixas.filter((n) => n.nome).map((n) => ({ ...n, serie: serieDe(n.nome) }))] }, imp.mesFixas) : { despesas: [], receitas: [] };
   const regras = regrasAPartirDe(imp.lancamentos);
@@ -618,7 +636,7 @@ function montarEnvio() {
     despesas: [...fixas.despesas, ...lanc.despesas],
     receitas: [...fixas.receitas, ...lanc.receitas],
     regras,
-    alteracoes: [...alteracoes, ...pagasNoExtrato.filter((p) => !alteracoes.some((a) => a.linha === p.linha))],
+    alteracoes: [...alteracoes, ...pagasNoExtrato.filter((p) => !alteracoes.some((a) => a.linha === p.linha)), ...renomearParcelasAnteriores(dados)],
     qtdFixas: fixas.despesas.length + fixas.receitas.length,
   };
 }
@@ -641,7 +659,7 @@ function passoEnviar(el, app) {
     return;
   }
 
-  const env = montarEnvio();
+  const env = montarEnvio(app.estado.dados);
   const totD = env.despesas.reduce((s, d) => s + d.VALOR, 0);
   const totR = env.receitas.reduce((s, d) => s + d.VALOR, 0);
   const meses = [...new Set([...env.despesas, ...env.receitas].map((d) => d.MES_DE_REFERENCIA))].sort();
@@ -649,7 +667,7 @@ function passoEnviar(el, app) {
     <div class="resumo">
       <div class="card"><div class="muted small">Despesas</div><div class="valor">${env.despesas.length}</div><div class="small text-2 num">${moeda(totD)}</div></div>
       <div class="card"><div class="muted small">Receitas</div><div class="valor">${env.receitas.length}</div><div class="small text-2 num">${moeda(totR)}</div></div>
-      <div class="card"><div class="muted small">Contas fixas</div><div class="valor">${env.qtdFixas}</div><div class="small text-2">${env.alteracoes.length ? `+ ${env.alteracoes.length} atualização(ões) de status` : 'novas no mês'}</div></div>
+      <div class="card"><div class="muted small">Contas fixas</div><div class="valor">${env.qtdFixas}</div><div class="small text-2">${env.alteracoes.length ? `+ ${env.alteracoes.length} linha(s) já existente(s) atualizada(s)` : 'novas no mês'}</div></div>
       <div class="card"><div class="muted small">Aprendizados</div><div class="valor">${env.regras.length}</div><div class="small text-2">regras novas ou atualizadas</div></div>
     </div>
     <div class="card">
@@ -690,7 +708,7 @@ async function enviarPlanilha(botao, env, app) {
     let extra = '';
     if (env.alteracoes.length) {
       const s = await enviar('status', { alteracoes: env.alteracoes });
-      extra = ` ${s.alteradas} conta(s) fixa(s) atualizada(s).`;
+      extra = ` ${s.alteradas} linha(s) já existente(s) atualizada(s) (status pago, nomes de parcelas).`;
       if (s.erros?.length) extra += ` Atenção: ${s.erros.join(' ')}`;
     }
     imp.resultado = {

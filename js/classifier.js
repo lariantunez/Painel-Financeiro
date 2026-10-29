@@ -157,7 +157,8 @@ export function criarClassificador({ regras = [], despesas = [], receitas = [], 
       if (parcelasUsadas.has(d)) continue;
       const p = parseParcela(d.parcelas);
       if (!p || p.n !== n || p.k !== k - 1) continue;
-      if (Math.abs(Math.abs(d.valor) - tx.valor) > 0.05) continue;
+      // a 1ª parcela costuma ter alguns centavos a mais (arredondamento)
+      if (Math.abs(Math.abs(d.valor) - tx.valor) > Math.max(0.15, tx.valor * 0.01)) continue;
       const origem = d.descOriginal ? chaveDescricao(d.descOriginal) : chaveDescricao(d.nome);
       const score = similaridade(tokBase, tokens(origem)) + (d.nome.includes(anterior) ? 0.1 : 0);
       if (score > melhorScore) {
@@ -231,13 +232,15 @@ export function criarClassificador({ regras = [], despesas = [], receitas = [], 
     if (parcela && lanc.destino === 'DESPESA') {
       const anterior = continuacaoParcela(tx, tx.descricao.replace(RX_PARCELA, ''), +parcela[1], +parcela[2]);
       if (anterior) {
+        const sufixo = `Parcela ${parcela[1]}/${parcela[2]}`;
         return Object.assign(lanc, {
-          nome: anterior.nome.replace(/Parcela\s+\d+\s*\/\s*\d+/i, `Parcela ${parcela[1]}/${parcela[2]}`),
+          nome: RX_PARCELA.test(anterior.nome) ? anterior.nome.replace(/Parcela\s+\d+\s*\/\s*\d+/i, sufixo) : `${anterior.nome.trim()} - ${sufixo}`,
           tipo: anterior.tipo,
           categoria: anterior.categoria || 'VARIÁVEL',
           confianca: 'certo',
           motivo: `Continuação de "${anterior.nome}"`,
           lembrar: false,
+          anteriorParcela: anterior, // se você renomear esta parcela, as anteriores na planilha acompanham
         });
       }
     }

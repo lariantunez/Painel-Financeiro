@@ -1,7 +1,7 @@
 // Tela principal: visão do mês.
 
 import { moeda, pct, nomeMes, somarMeses, MESES, escapeHtml, rotulo, parseData, mesAtual, RX_PARCELA } from './util.js';
-import { totaisMes, serieMeses, porTipo, fixoVariavel, contasAPagar, parcelamentos, maioresGastos, qualidade, tipoDe } from './analise.js';
+import { totaisMes, serieMeses, porTipo, fixoVariavel, contasAPagar, parcelamentos, maioresGastos, qualidade, tipoDe, parcelasDaMesmaCompra, nomeDaParcela } from './analise.js';
 import { graficoColunas, responsivo, legenda, linhaTooltip, mostrarTooltip, esconderTooltip, toast, $, $$ } from './ui.js';
 import { backendConfigurado, enviar } from './api.js';
 import { valoresUsados, regraParaLinha } from './model.js';
@@ -405,8 +405,10 @@ function linhaDespesa(d, editavel) {
 
 function linhaEmEdicao(d) {
   const tipos = ctxTabela.tipos;
+  const outras = parcelasDaMesmaCompra(ctxTabela.app.estado.dados.despesas, d).length - 1;
+  const aviso = outras > 0 ? `<span class="desc-original" style="color:var(--accent)">Também atualiza as outras ${outras} parcela(s) desta compra</span>` : '';
   return `<tr class="editando"><td class="tab">${escapeHtml(d.vencimento)}</td>
-    <td><input class="input input-sm" id="edit-nome" value="${escapeHtml(d.nome)}" aria-label="Nome da despesa">${d.descOriginal ? `<span class="desc-original">No banco: ${escapeHtml(d.descOriginal)}</span>` : ''}</td>
+    <td><input class="input input-sm" id="edit-nome" value="${escapeHtml(d.nome)}" aria-label="Nome da despesa">${d.descOriginal ? `<span class="desc-original">No banco: ${escapeHtml(d.descOriginal)}</span>` : ''}${aviso}</td>
     <td><select class="select select-sm" id="edit-tipo" aria-label="Tipo">${!d.tipo ? '<option value="">Escolha…</option>' : ''}${tipos.map((x) => `<option ${x === d.tipo ? 'selected' : ''}>${escapeHtml(x)}</option>`).join('')}</select></td>
     <td class="text-2 opc">${escapeHtml(d.forma)}</td><td class="tab opc">${escapeHtml(d.parcelas && d.parcelas !== '1/1' ? d.parcelas : '')}</td><td class="opc">${statusBadge(d.status)}</td>
     <td class="num">${moeda(d.valor)}</td>
@@ -432,20 +434,32 @@ function ligarEdicao(el, t, linhas) {
   const salvar = async () => {
     const nome = $('#edit-nome', el).value.trim();
     const tipo = $('#edit-tipo', el).value;
-    const campos = {};
-    if (nome && nome !== d.nome) campos.NOME_DESPESA = nome;
-    if (tipo && tipo !== d.tipo) campos.TIPO = tipo;
-    if (!Object.keys(campos).length) return cancelar();
+    // Parcelada: o novo nome/tipo vale para todas as parcelas da compra, cada uma com seu número
+    const mudouNome = nome && nome !== d.nome;
+    const mudouTipo = tipo && tipo !== d.tipo;
+    if (!mudouNome && !mudouTipo) return cancelar();
+    const parcelas = parcelasDaMesmaCompra(ctxTabela.app.estado.dados.despesas, d);
+    const alteracoes = parcelas
+      .map((x) => {
+        const campos = {};
+        const novoNome = x === d && !RX_PARCELA.test(d.nome) ? nome : nomeDaParcela(nome, x);
+        if (mudouNome && novoNome !== x.nome) campos.NOME_DESPESA = novoNome;
+        if (mudouTipo && tipo !== x.tipo) campos.TIPO = tipo;
+        return { x, campos };
+      })
+      .filter(({ campos }) => Object.keys(campos).length);
+    if (!alteracoes.length) return cancelar();
     const botao = $('#edit-salvar', el);
     botao.disabled = true;
     botao.textContent = 'Salvando…';
     try {
-      const r = await enviar('status', { alteracoes: [{ aba: 'despesas', linha: d._linha, nome: d.nome, campos }] });
-      if (r.erros?.length) throw new Error(r.erros[0]);
+      const r = await enviar('status', { alteracoes: alteracoes.map(({ x, campos }) => ({ aba: 'despesas', linha: x._linha, nome: x.nome, campos })) });
+      if (r.erros?.length && !r.alteradas) throw new Error(r.erros[0]);
+      if (r.erros?.length) toast(`Algumas parcelas não foram atualizadas: ${r.erros[0]}`, 'erro', 8000);
       await ensinar(d, nome || d.nome, tipo || d.tipo);
-      Object.assign(d, { nome: nome || d.nome, tipo: tipo || d.tipo });
+      for (const { x, campos } of alteracoes) Object.assign(x, { nome: campos.NOME_DESPESA || x.nome, tipo: campos.TIPO || x.tipo });
       editando = null;
-      toast('Despesa atualizada na planilha');
+      toast(alteracoes.length > 1 ? `${alteracoes.length} parcelas atualizadas na planilha` : 'Despesa atualizada na planilha');
       ctxTabela.app.recarregar();
     } catch (err) {
       toast(err.message, 'erro', 6000);

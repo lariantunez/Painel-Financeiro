@@ -8,6 +8,7 @@ import { criarClassificador, chaveDescricao, paraLinhasPlanilha, regrasAPartirDe
 import { normalizarDespesa, normalizarReceita } from '../js/model.js';
 import { montarFixas, fixasParaLinhas } from '../js/fixas.js';
 import { parseValor, parseMesRef } from '../js/util.js';
+import { parcelasDaMesmaCompra, nomeDaParcela } from '../js/analise.js';
 
 let ok = 0;
 const teste = (nome, fn) => {
@@ -170,6 +171,20 @@ if (pasta) {
     assert.equal(l2.confianca, 'sugestao');
     assert.equal(l2.tipo, 'ACESSÓRIOS');
     assert.notEqual(l2.nome, 'Capinha de celular');
+  });
+  teste('Renomear parcela atualiza a compra inteira, cada uma com seu número', () => {
+    const amazon = despesas.find((d) => d.nome === 'Amazon Monitores - Parcela 8/10');
+    const serie = parcelasDaMesmaCompra(despesas, amazon);
+    assert.equal(serie.length, 8, `achou ${serie.length} parcelas`);
+    assert.ok(serie.some((d) => d.nome === 'Monitores' && d.parcelas === '1/10')); // a 1ª tinha outro nome
+    assert.ok(serie.every((d) => /Monitores/.test(d.nome)));
+    assert.equal(nomeDaParcela('Monitores LG', amazon), 'Monitores LG - Parcela 8/10');
+    assert.equal(nomeDaParcela('Monitores LG - Parcela 1/10', serie.find((d) => d.parcelas === '3/10')), 'Monitores LG - Parcela 3/10');
+    // linha com PARCELAS "6/10" mas nome "Parcela 7/10": vale o nome
+    assert.equal(nomeDaParcela('Monitores LG', serie.find((d) => d.nome.endsWith('7/10'))), 'Monitores LG - Parcela 7/10');
+    assert.equal(nomeDaParcela('Monitores LG', serie.find((d) => d.nome === 'Monitores')), 'Monitores LG - Parcela 1/10');
+    const moto = despesas.find((d) => d.nome === 'Moto' && d.parcelas === '8/48');
+    assert.equal(nomeDaParcela('Moto Honda', moto), 'Moto Honda');
   });
   teste('Parcela seguinte com mesmo valor não é duplicata', () => {
     const l = criarClassificador({ despesas, receitas }).classificarExtrato(lerExtrato('date,title,amount\n2026-09-07,LIVELO - NuPay - Parcela 2/10,"299,48"', 'f.csv'))[0];

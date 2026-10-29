@@ -206,7 +206,7 @@ export function renderPainel(raiz, app) {
         ${Object.entries(filtros)
           .map(([k, f]) => `<button class="filtro-chip" data-tirar="${k}" title="Tirar este filtro">${FILTROS[k].rotulo}: ${escapeHtml(f.texto)} <span aria-hidden="true">×</span></button>`)
           .join('')}
-        <button class="btn btn-sm" id="limpar-filtros" ${temFiltro(app.estado) ? '' : 'disabled'} title="Volta para o mês atual e limpa o tipo, a busca e a ordenação das tabelas">✕ Limpar filtros</button>
+        <button class="btn btn-sm" id="limpar-filtros" ${temFiltro(app.estado) ? '' : 'disabled'} title="Volta para o mês atual e limpa o tipo, a busca e a ordenação das tabelas">Limpar filtros</button>
       </div>
     </div>
 

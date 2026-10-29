@@ -141,6 +141,8 @@ a { color: var(--accent); }
 .nav a:hover { background: var(--hover); color: var(--text); }
 .nav a.ativo { background: var(--text); color: var(--bg); }
 .nav .badge { margin-left: 6px; }
+.btn-tema { color: var(--text-2); gap: 6px; margin-left: auto; }
+.btn-tema span { font-size: 14px; line-height: 1; }
 .sync { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 12px; white-space: nowrap; }
 .sync-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--good); }
 .sync-dot.erro { background: var(--critical); }
@@ -519,3 +521,10 @@ code, .mono { font-family: ui-monospace, 'Cascadia Code', Consolas, monospace; f
   .edicao { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .edicao .edicao-nome { grid-column: 1 / -1; }
 }
+
+/* aprendizado */
+.tabela-regras tr.regra-alterada td { background: var(--warning-soft); }
+.tabela-regras td { padding: 7px 6px; }
+.tabela-regras td .select { min-width: 92px; padding-right: 4px; }
+.tabela-regras td .input { min-width: 130px; }
+.tabela-regras td:first-child .mono { word-break: break-word; }

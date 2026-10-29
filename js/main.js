@@ -1,7 +1,7 @@
 // Inicialização, rotas e atualização automática.
 
 import { mesAtual } from './util.js';
-import { carregarDados, dadosEmCache, config, importarConfiguracaoDoLink } from './api.js';
+import { carregarDados, dadosEmCache, config, salvarConfig, importarConfiguracaoDoLink } from './api.js';
 import { renderPainel } from './pagina-painel.js';
 import { renderImportar, importacaoEmAndamento } from './pagina-importar.js';
 import { renderAprendizado } from './pagina-aprendizado.js';
@@ -108,9 +108,17 @@ async function recarregar({ silencioso = false } = {}) {
   }
 }
 
+const escuroNoSistema = window.matchMedia('(prefers-color-scheme: dark)');
+const temaEfetivo = () => (config.tema === 'auto' ? (escuroNoSistema.matches ? 'dark' : 'light') : config.tema);
+
 function aplicarTema() {
   if (config.tema === 'auto') delete document.documentElement.dataset.theme;
   else document.documentElement.dataset.theme = config.tema;
+  // o botão mostra para qual tema vai trocar
+  const botao = $('#btn-tema');
+  const escuro = temaEfetivo() === 'dark';
+  botao.innerHTML = escuro ? '<span aria-hidden="true">☀</span> Claro' : '<span aria-hidden="true">☾</span> Escuro';
+  botao.title = escuro ? 'Mudar para o tema claro' : 'Mudar para o tema escuro';
 }
 
 // ───────────── Início ─────────────
@@ -128,6 +136,12 @@ window.addEventListener('hashchange', () => {
   window.scrollTo({ top: 0 });
 });
 $('#btn-atualizar').addEventListener('click', () => recarregar());
+$('#btn-tema').addEventListener('click', () => {
+  salvarConfig({ tema: temaEfetivo() === 'dark' ? 'light' : 'dark' });
+  aplicarTema();
+  if (estado.rota === 'config') renderizar(); // mantém o seletor de Aparência em sincronia
+});
+escuroNoSistema.addEventListener('change', aplicarTema);
 
 setInterval(() => {
   if (document.visibilityState === 'visible') recarregar({ silencioso: true });

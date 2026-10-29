@@ -97,6 +97,8 @@ function renderLateral(app, dados) {
   if (!anos.includes(ano)) anos.push(ano);
   const doAno = mesesDoAno(ano).filter((m) => m <= fim);
   const anoInteiro = doAno.length > 1 && doAno.every((m) => meses.includes(m));
+  const doze = Array.from({ length: 12 }, (_, i) => somarMeses(mesAtual(), -i));
+  const ultimos12 = meses.length === 12 && doze.every((m) => meses.includes(m));
   el.innerHTML = `
     <div class="lat-bloco"><div class="lat-titulo">Ano</div><div class="lat-lista">${anos
       .map((a) => `<button class="lat-item ${a === ano ? 'ativo' : ''}" data-ano="${a}">${a}</button>`)
@@ -104,8 +106,12 @@ function renderLateral(app, dados) {
     <div class="lat-bloco"><div class="lat-titulo">Mês</div><div class="lat-lista">${mesesDoAno(ano)
       .map((m, i) => `<button class="lat-item ${meses.includes(m) ? 'ativo' : ''} ${comDados.has(m) ? '' : 'sem-dados'}" data-mes-lat="${m}" ${m > fim ? 'disabled' : ''}>${MESES_LONGOS[i]}</button>`)
       .join('')}</div>
-      <div class="lat-acoes"><button data-atalho="ano" class="${anoInteiro ? 'ativo' : ''}">Ano inteiro</button><button data-atalho="12">Últimos 12 meses</button></div>
-      <div class="lat-dica">Ctrl+clique soma meses</div></div>`;
+    </div>
+    <div class="lat-bloco"><div class="lat-titulo">Atalhos</div><div class="lat-lista">
+      <button class="lat-item ${anoInteiro ? 'ativo' : ''}" data-atalho="ano">Ano inteiro</button>
+      <button class="lat-item ${ultimos12 ? 'ativo' : ''}" data-atalho="12">Últimos 12 meses</button>
+      <button class="lat-item lat-varios ${modoVarios ? 'ativo' : ''}" data-atalho="varios" aria-pressed="${modoVarios}">${modoVarios ? '✓ ' : ''}Selecionar vários</button>
+    </div>${modoVarios ? '<div class="lat-dica">Toque nos meses para somar ou tirar</div>' : ''}</div>`;
   for (const b of el.querySelectorAll('[data-mes-lat]')) b.addEventListener('click', (e) => clicarMes(app, b.dataset.mesLat, e));
   for (const b of el.querySelectorAll('[data-ano]')) {
     b.addEventListener('click', () => {
@@ -114,13 +120,21 @@ function renderLateral(app, dados) {
     });
   }
   el.querySelector('[data-atalho="ano"]').addEventListener('click', () => app.definirMeses(anoInteiro ? [mesAtual()] : doAno));
-  el.querySelector('[data-atalho="12"]').addEventListener('click', () => app.definirMeses(Array.from({ length: 12 }, (_, i) => somarMeses(mesAtual(), -i))));
+  el.querySelector('[data-atalho="12"]').addEventListener('click', () => app.definirMeses(ultimos12 ? [mesAtual()] : doze));
+  el.querySelector('[data-atalho="varios"]').addEventListener('click', () => {
+    modoVarios = !modoVarios;
+    renderLateral(app, dados);
+  });
 }
 
-// Clicar num mês (lateral ou gráficos): escolhe; de novo no mesmo: volta ao mês atual; Ctrl: soma/tira
+// "Selecionar vários": cada toque num mês soma/tira (no celular não há Ctrl)
+let modoVarios = false;
+
+// Clicar num mês (lateral ou gráficos): escolhe; de novo no mesmo: volta ao mês atual;
+// Ctrl+clique ou "Selecionar vários": soma/tira
 function clicarMes(app, m, e) {
   const { meses } = app.estado;
-  if (e && (e.ctrlKey || e.metaKey)) app.definirMeses(meses.includes(m) ? meses.filter((x) => x !== m) : [...meses, m]);
+  if (modoVarios || (e && (e.ctrlKey || e.metaKey))) app.definirMeses(meses.includes(m) ? meses.filter((x) => x !== m) : [...meses, m]);
   else if (meses.length === 1 && meses[0] === m) app.irParaMes(mesAtual());
   else app.irParaMes(m);
 }

@@ -152,6 +152,7 @@ a { color: var(--accent); }
 .nav a { color: var(--lateral-texto); text-decoration: none; padding: 8px 12px; border-radius: 8px; font-weight: 500; white-space: nowrap; }
 .nav a:hover { background: rgba(255, 255, 255, 0.07); color: #fff; }
 .nav a.ativo { background: var(--lateral-ativo); color: #fff; }
+#lateral-periodo { display: grid; gap: 16px; }
 .lat-bloco { display: grid; gap: 4px; }
 .lat-titulo { font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; color: rgba(196, 198, 236, 0.6); margin: 0 12px 2px; }
 .lat-lista { display: flex; flex-direction: column; gap: 1px; }
@@ -161,10 +162,8 @@ a { color: var(--accent); }
 .lat-item.sem-dados:not(.ativo) { color: rgba(196, 198, 236, 0.45); }
 .lat-item:disabled { opacity: 0.3; cursor: default; }
 .lat-item:focus-visible, .nav a:focus-visible { outline: 2px solid #fff; outline-offset: 1px; }
-.lat-acoes { display: flex; gap: 6px; padding: 4px 12px 0; flex-wrap: wrap; }
-.lat-acoes button { background: rgba(255, 255, 255, 0.07); border: 0; color: var(--lateral-texto); border-radius: 999px; padding: 3px 10px; font-size: 12px; cursor: pointer; }
-.lat-acoes button:hover, .lat-acoes button.ativo { background: var(--lateral-ativo); color: #fff; }
-.lat-dica { font-size: 11px; color: rgba(196, 198, 236, 0.5); margin: 4px 12px 0; }
+.lat-varios.ativo { background: rgba(255, 255, 255, 0.12); color: #fff; }
+.lat-dica { font-size: 11px; color: rgba(196, 198, 236, 0.6); margin: 4px 12px 0; }
 .lateral-rodape { margin-top: auto; display: grid; gap: 4px; }
 .lateral .btn-ghost { color: var(--lateral-texto); justify-content: flex-start; border-color: transparent; }
 .lateral .btn-ghost:hover { background: rgba(255, 255, 255, 0.07); color: #fff; }
@@ -187,8 +186,8 @@ main { width: 100%; max-width: 1680px; margin: 0 auto; padding: 24px clamp(16px,
   #lateral-periodo:empty { display: none; }
   .lat-bloco { display: flex; align-items: center; gap: 6px; overflow-x: auto; scrollbar-width: none; }
   .lat-lista { flex-direction: row; }
-  .lat-titulo, .lat-dica { display: none; }
-  .lat-acoes { padding: 0; flex-wrap: nowrap; }
+  .lat-titulo { display: none; }
+  .lat-dica { margin: 0; white-space: nowrap; }
   .lateral-rodape { margin: 0 0 0 auto; display: flex; gap: 2px; }
   .lateral .sync-texto { display: none; }
 }

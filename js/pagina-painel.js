@@ -1,6 +1,6 @@
 // Tela principal: visão do mês.
 
-import { moeda, pct, nomeMes, somarMeses, MESES, MESES_LONGOS, escapeHtml, rotulo, mesAtual, RX_PARCELA, parseValor, arred, rotuloPeriodo, mesRefBR } from './util.js';
+import { moeda, pct, nomeMes, somarMeses, MESES, MESES_LONGOS, escapeHtml, rotulo, mesAtual, RX_PARCELA, parseValor, arred, rotuloPeriodo, mesRefBR, formatarDescricao } from './util.js';
 import { totaisMes, serieMeses, porTipo, fixoVariavel, contasAPagar, parcelamentos, maioresGastos, qualidade, tipoDe, mesmaDespesa, lancamentosSeguintes, nomeDaParcela, periodoAnterior, FILTROS, filtrarDespesas, mesesDoAno, somarPor, receitasDoAno, coresDosTipos, segmentosPorTipo, OUTROS } from './analise.js';
 import { sparkline, linhasSuaves, rosca, aneis } from './graficos.js';
 import { serieDe } from './fixas.js';
@@ -10,11 +10,13 @@ import { valoresUsados, regraParaLinha } from './model.js';
 import { chaveDescricao, ehMarketplace } from './classifier.js';
 
 const COR_R = 'var(--receita)';
-// Análise mensal das receitas: uma série por pessoa (salário) e o resto junto
-const PESSOAS = ['LARISSA', 'DOUGLAS'];
+// Análise mensal das receitas: a renda do trabalho de cada pessoa (salário, férias, 13º, PLR, bônus, hora extra…),
+// a do casal (ex.: Amazon) e o resto junto
+const PESSOAS = ['LARISSA', 'DOUGLAS', 'CASAL'];
 const SERIES_RECEITA = [
-  { nome: 'Salário Larissa', cor: COR_R, valor: (r) => r.salarios.LARISSA },
-  { nome: 'Salário Douglas', cor: 'var(--serie-b)', valor: (r) => r.salarios.DOUGLAS },
+  { nome: 'Renda do casal', cor: 'var(--serie-casal)', valor: (r) => r.salarios.CASAL },
+  { nome: 'Renda Larissa', cor: COR_R, valor: (r) => r.salarios.LARISSA },
+  { nome: 'Renda Douglas', cor: 'var(--serie-b)', valor: (r) => r.salarios.DOUGLAS },
   { nome: 'Outras receitas', cor: 'var(--serie-3)', valor: (r) => r.outras },
 ];
 const COR_D = 'var(--despesa)';
@@ -869,7 +871,7 @@ function ligarEdicao(el, t, linhas) {
     renderTabela(el, t);
   };
   const salvar = async () => {
-    const nome = $('#edit-nome', el).value.trim();
+    const nome = formatarDescricao($('#edit-nome', el).value);
     const tipo = $('#edit-tipo', el).value;
     const valor = arred(parseValor($('#edit-valor', el).value));
     const categoria = $('#edit-categoria', el).value;
@@ -1010,7 +1012,7 @@ function ligarEdicaoReceita(el, t, linhas) {
   };
   const salvar = async () => {
     const novo = {
-      tipo: $('#rec-tipo', el).value.trim(),
+      tipo: formatarDescricao($('#rec-tipo', el).value),
       nome: $('#rec-nome', el).value,
       valor: arred(parseValor($('#rec-valor', el).value)),
       mesRef: $('#rec-mes', el).value,

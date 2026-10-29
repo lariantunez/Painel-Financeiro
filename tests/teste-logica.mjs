@@ -40,7 +40,7 @@ teste('Reembolso abate gasto (não é renda); salário vai para a pessoa; financ
   assert.equal(a.m.renda, 8000);
   assert.equal(a.m.gasto, 3100);
   assert.equal(a.m.saldo, 4900);
-  assert.deepEqual(a.salarioPessoa, { LARISSA: 3000, DOUGLAS: 5000 });
+  assert.deepEqual(a.salarioPessoa, { LARISSA: 3000, DOUGLAS: 5000, CASAL: 0 });
   assert.equal(a.m.financiamentos, 3000);
   assert.equal(a.financiamentos[0].restantes, 375);
   assert.equal(a.alertas.find((x) => x.titulo === 'Os gastos estão maiores que a renda'), undefined);

@@ -1,7 +1,7 @@
 // Análise: diagnóstico das finanças, pontos críticos, oportunidades, cenários e investimentos.
 // Tudo recalculado dos lançamentos a cada visita; os parâmetros (reserva, taxas, perfil) ficam neste navegador.
 
-import { analisarFinancas, cenario, planoReserva, valorFuturo, taxaReal, PERFIS, NECESSIDADES_PADRAO, PESSOAS } from './financas.js';
+import { analisarFinancas, cenario, planoReserva, valorFuturo, taxaReal, PERFIS, NECESSIDADES_PADRAO, PESSOAS, INDIVIDUAIS } from './financas.js';
 import { coresDosTipos } from './analise.js';
 import { config, salvarConfig } from './api.js';
 import { moeda, moedaCompacta, pct, nomeMes, MESES, escapeHtml, rotulo, parseValor } from './util.js';
@@ -22,8 +22,9 @@ const COR_ESTILO = 'var(--cat-2)';
 const COR_SOBRA = 'var(--serie-3)';
 const capital = (t) => String(t || '').toLowerCase().replace(/(^|[\s/])\p{L}/gu, (c) => c.toUpperCase());
 // Renda por pessoa: as mesmas cores do gráfico de receitas do Painel
+const COR_PESSOA = { CASAL: 'var(--serie-casal)', LARISSA: 'var(--receita)', DOUGLAS: 'var(--serie-b)' };
 const SERIES_RENDA = [
-  ...PESSOAS.map((p, i) => ({ nome: capital(p), cor: i === 0 ? 'var(--receita)' : 'var(--serie-b)', media: (a) => a.salarioPessoa[p], doMes: (m) => m.salarios[p] })),
+  ...PESSOAS.map((p) => ({ nome: p === 'CASAL' ? 'Casal' : capital(p), cor: COR_PESSOA[p], media: (a) => a.salarioPessoa[p], doMes: (m) => m.salarios[p] })),
   { nome: 'Outras', cor: 'var(--serie-3)', media: (a) => a.outrasRendas, doMes: (m) => Math.max(0, m.renda - PESSOAS.reduce((s, p) => s + m.salarios[p], 0)) },
 ];
 const NIVEL = { critico: ['badge-crit', '● Crítico'], atencao: ['badge-warn', '▲ Atenção'], bom: ['badge-good', '✓ Bom'] };
@@ -218,7 +219,7 @@ function bloco503020(a) {
 
 function blocoRenda(a) {
   const total = a.m.renda || 1;
-  const partes = SERIES_RENDA.map((s) => [s.nome, s.media(a), s.cor]).filter(([, v]) => v > 0);
+  const partes = SERIES_RENDA.map((s) => [s.nome, s.media(a), s.cor]).filter(([, v]) => v >= 1);
   const rendas = a.mensal.filter((m) => m.temDados).map((m) => m.renda);
   const menor = Math.min(...rendas);
   const maior = Math.max(...rendas);
@@ -263,7 +264,7 @@ function blocoReserva(a, p) {
 }
 
 function blocoEstresse(a) {
-  const linhas = PESSOAS.filter((p) => a.salarioPessoa[p] > 0).map((p) => {
+  const linhas = INDIVIDUAIS.filter((p) => a.salarioPessoa[p] > 0).map((p) => {
     const falta = Math.max(0, a.salarioPessoa[p] - a.m.saldo);
     const dura = a.reserva != null && falta > 0 ? a.reserva / falta : null;
     return `<tr><td>Se a renda de <b>${capital(p)}</b> parar</td><td class="num">${moedaInt(a.salarioPessoa[p])}/mês</td><td class="num neg">−${moedaInt(falta)}/mês</td><td class="num">${dura == null ? (a.reserva == null ? '<span class="muted">informe a reserva</span>' : '—') : `${dura.toLocaleString('pt-BR', { maximumFractionDigits: 1 })} mês(es)`}</td></tr>`;

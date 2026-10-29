@@ -156,6 +156,32 @@ export function escapeHtml(texto) {
     .replace(/'/g, '&#39;');
 }
 
+// Descrições no padrão "Primeira Letra Maiúscula": conectivos em minúsculas, siglas em maiúsculas.
+// Palavras com maiúscula no meio (iFood, McDonald's), com números (2/10) e siglas curtas já em maiúsculas (BK) ficam como estão.
+const CONECTIVOS = new Set(['de', 'da', 'do', 'das', 'dos', 'e', 'com', 'para', 'em', 'no', 'na', 'nos', 'nas', 'por', 'a', 'o', 'ao', 'aos', 'as', 'os', 'la', 'el', 'del', 'y']);
+const SIGLAS = new Set(['IPVA', 'IPTU', 'DAS', 'CNPJ', 'CPF', 'MEI', 'TV', 'PIX', 'IOF', 'IR', 'IRPF', 'IRRF', 'PLR', 'DPVAT', 'CNH', 'SUS', 'FGTS', 'INSS', 'PJ', 'PF', 'TAG', 'GNV', 'SP', 'RJ', 'MG', 'BR', 'USB', 'PC', 'LTDA', 'ME', 'EPP', 'SA', 'DJ', 'UTI']);
+export function formatarDescricao(texto) {
+  let primeira = true;
+  const todoMaiusculo = String(texto || '') === String(texto || '').toUpperCase();
+  return String(texto || '')
+    .trim()
+    .replace(/\s+/g, ' ')
+    .replace(/[\p{L}\p{N}'’.]+/gu, (palavra) => {
+      const eraPrimeira = primeira;
+      primeira = false;
+      const letras = palavra.replace(/[^\p{L}]/gu, '');
+      if (!letras || /\d/.test(palavra)) return palavra;
+      const maiuscula = letras === letras.toUpperCase();
+      if (/\p{Lu}/u.test(letras.slice(1)) && !maiuscula) return palavra; // iFood, McDonald's
+      const minuscula = palavra.toLowerCase();
+      // "das" é conectivo; só vira a sigla DAS quando já estava em maiúsculas
+      if (!eraPrimeira && CONECTIVOS.has(minuscula) && !(maiuscula && SIGLAS.has(rotulo(palavra)) && !todoMaiusculo)) return minuscula;
+      if (SIGLAS.has(rotulo(palavra.replace(/\./g, '')))) return palavra.toUpperCase();
+      if (maiuscula && letras.length <= 2 && !CONECTIVOS.has(minuscula)) return palavra; // BK, 99 → sigla curta
+      return minuscula.charAt(0).toUpperCase() + minuscula.slice(1);
+    });
+}
+
 export function capitalizar(texto) {
   return String(texto || '')
     .toLowerCase()

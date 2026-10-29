@@ -2,7 +2,7 @@
 // usando (1) regras automáticas, (2) continuação de parcelamentos, (3) regras aprendidas e
 // (4) o histórico da própria planilha. O que não tiver certeza vira pergunta para o usuário.
 
-import { rotulo, dataBR, mesRefBR, chaveMes, somarMeses, parseParcela, RX_PARCELA, capitalizar, arred } from './util.js';
+import { rotulo, dataBR, mesRefBR, chaveMes, somarMeses, parseParcela, RX_PARCELA, capitalizar, arred, formatarDescricao } from './util.js';
 
 export const DESTINOS = ['DESPESA', 'RECEITA', 'IGNORAR'];
 export const FORMAS = ['DÉBITO', 'CRÉDITO A VISTA', 'CRÉDITO PARCELADO', 'DÉBITO EM CONTA', 'BOLETO', 'PIX'];
@@ -402,7 +402,7 @@ export function paraLinhasPlanilha(lancamentos) {
     if (l.destino === 'IGNORAR' || l.jaLancado || l.excluir) continue;
     if (l.destino === 'DESPESA') {
       despesas.push({
-        NOME_DESPESA: l.nome,
+        NOME_DESPESA: formatarDescricao(l.nome),
         VENCIMENTO: l.vencimento,
         VALOR: l.valor,
         CATEGORIA: l.categoria,
@@ -419,7 +419,7 @@ export function paraLinhasPlanilha(lancamentos) {
     } else {
       receitas.push({
         NOME: l.titular,
-        TIPO: l.tipo,
+        TIPO: formatarDescricao(l.tipo),
         VALOR: Math.abs(l.valor),
         DATA: mesRefBR(l.mesRef),
         INSTITUICAO_FINANCEIRA: l.instituicao,

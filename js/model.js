@@ -1,6 +1,6 @@
 // Converte linhas da planilha (chaves = cabeçalhos normalizados) para o modelo interno.
 
-import { parseValor, parseData, parseMesRef, rotulo } from './util.js';
+import { parseValor, parseData, parseMesRef, rotulo, formatarDescricao } from './util.js';
 
 export function normalizarDespesa(r) {
   const venc = r.VENCIMENTO || r.DATA || '';
@@ -61,8 +61,8 @@ export function regraParaLinha(r) {
   return {
     CHAVE: r.chave,
     DESTINO: r.destino,
-    NOME: r.nome,
-    TIPO: r.tipo,
+    NOME: formatarDescricao(r.nome),
+    TIPO: r.destino === 'RECEITA' ? formatarDescricao(r.tipo) : r.tipo,
     CATEGORIA: r.categoria,
     RECORRENCIA: r.recorrencia || '',
     TITULAR: r.titular || '',

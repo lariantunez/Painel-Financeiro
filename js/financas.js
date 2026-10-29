@@ -5,7 +5,9 @@ import { rotulo, somarMeses, mesAtual, parseParcela } from './util.js';
 import { serieDe } from './fixas.js';
 import { tipoDe, ehSalario, donoDoSalario } from './analise.js';
 
-export const PESSOAS = ['LARISSA', 'DOUGLAS'];
+export const PESSOAS = ['LARISSA', 'DOUGLAS', 'CASAL'];
+// Quem tem renda individual (o salário do casal não entra na concentração nem no teste de estresse por pessoa)
+export const INDIVIDUAIS = ['LARISSA', 'DOUGLAS'];
 
 // Tipos que contam como necessidade (moradia, comida, saúde, deslocamento, contas). O resto é estilo de vida.
 // A pessoa pode trocar na tela; isto é só o ponto de partida.
@@ -118,7 +120,7 @@ export function analisarFinancas(dados, opcoes = {}) {
   // Renda por pessoa
   const salarioPessoa = Object.fromEntries(PESSOAS.map((p) => [p, soma(comDados, (x) => x.salarios[p]) / k]));
   const outrasRendas = Math.max(0, m.renda - Object.values(salarioPessoa).reduce((s, v) => s + v, 0));
-  const maiorRenda = Object.entries(salarioPessoa).sort((a, b) => b[1] - a[1])[0];
+  const maiorRenda = Object.entries(salarioPessoa).filter(([p]) => INDIVIDUAIS.includes(p)).sort((a, b) => b[1] - a[1])[0];
 
   // Tipos: total, média, peso, tendência (últimos 3 × 3 anteriores) e o nível dos meses mais econômicos (1º quartil)
   const tiposNomes = [...new Set(despesas.map(tipoDe))];
@@ -279,7 +281,7 @@ function alertas(a) {
   }
 
   const totalSal = Object.values(salarioPessoa).reduce((s, v) => s + v, 0);
-  const [pessoa, valorPessoa] = Object.entries(salarioPessoa).sort((x, y) => y[1] - x[1])[0] || [];
+  const [pessoa, valorPessoa] = Object.entries(salarioPessoa).filter(([p]) => INDIVIDUAIS.includes(p)).sort((x, y) => y[1] - x[1])[0] || [];
   if (totalSal > 0 && valorPessoa / totalSal > 0.65) {
     lista.push({ nivel: 'atencao', titulo: 'Renda concentrada em uma pessoa', valor: valorPessoa / totalSal, formato: 'pct',
       texto: `${pctTexto(valorPessoa / totalSal)} dos salários vêm de ${capital(pessoa)}. Se essa renda parar, faltariam cerca de ${fmt(Math.max(0, valorPessoa - m.saldo))} por mês.` });

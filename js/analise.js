@@ -77,7 +77,9 @@ export function somarPor(lista, chave) {
 
 // Receitas do ano mês a mês: salário de cada pessoa × outras receitas
 // O dono do salário vem do tipo ("Salário Douglas") e, se não estiver lá, da coluna NOME
-export const ehSalario = (r) => /SALARIO|FERIAS|PLR|RESCISAO|DECIMO TERCEIRO|13O SALARIO/.test(rotulo(`${r.tipo}`));
+// Renda do trabalho de cada pessoa: salário e tudo o que vem junto (férias, 13º, PLR, bônus, rescisão, hora extra…)
+export const RX_RENDA_TRABALHO = /SALARIO|FERIAS|PLR|PARTICIPACAO NOS LUCROS|RESCISAO|DECIMO|13O|13º|13°|BONUS|BONIFICACAO|GRATIFICACAO|HORAS? EXTRAS?|ADICIONAL|COMISSAO/;
+export const ehSalario = (r) => RX_RENDA_TRABALHO.test(rotulo(`${r.tipo}`));
 export function donoDoSalario(r, pessoas) {
   const tipo = rotulo(r.tipo);
   return pessoas.find((p) => tipo.includes(p)) || pessoas.find((p) => rotulo(r.nome) === p) || '';

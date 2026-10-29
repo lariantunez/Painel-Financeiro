@@ -22,6 +22,7 @@
   --despesa: #e061cc;
   --serie-b: #eda100;
   --serie-3: #1baf7a;
+  --serie-casal: #0097b8;
   --media-fundo: color-mix(in srgb, var(--despesa) 22%, var(--surface));
   /* tipos de despesa (rosca, anéis): ordem fixa validada */
   --cat-1: #2a78d6; --cat-2: #eb6834; --cat-3: #1baf7a; --cat-4: #eda100;
@@ -71,6 +72,7 @@
     --despesa: #d65fc2;
     --serie-b: #c98500;
     --serie-3: #199e70;
+    --serie-casal: #4cb3e8;
     --media-fundo: color-mix(in srgb, var(--despesa) 30%, var(--surface));
     --cat-1: #3987e5; --cat-2: #d95926; --cat-3: #199e70; --cat-4: #c98500;
     --cat-5: #d55181; --cat-6: #008300; --cat-7: #9085e9; --cat-8: #e66767;
@@ -105,6 +107,7 @@
   --despesa: #d65fc2;
   --serie-b: #c98500;
   --serie-3: #199e70;
+  --serie-casal: #4cb3e8;
   --media-fundo: color-mix(in srgb, var(--despesa) 30%, var(--surface));
   --cat-1: #3987e5; --cat-2: #d95926; --cat-3: #199e70; --cat-4: #c98500;
   --cat-5: #d55181; --cat-6: #008300; --cat-7: #9085e9; --cat-8: #e66767;

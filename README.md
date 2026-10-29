@@ -11,6 +11,22 @@ Publicado em: https://lariantunez.github.io/Painel-Financeiro/
 3. **Revisar** → só aparecem os lançamentos novos ou duvidosos. O que você decidir vale para todos os lançamentos iguais e fica memorizado para os próximos meses.
 4. **Enviar** → as linhas vão para a planilha. Cada importação pode ser desfeita.
 
+## Telas
+
+- **Painel** — período de um ou vários meses: receitas, despesas, saldo, tipos, composição (mensal × eventual, fixo × variável), contas a pagar, parcelamentos e lançamentos editáveis (nome, tipo, valor, categoria, recorrência, status).
+- **Previsão** — próximos 6/12 meses: contas mensais (último valor) + parcelas restantes × receitas previstas.
+- **Importar** — extratos + contas do mês + revisão.
+- **Aprendizado** — regras memorizadas.
+
+## Classificação das despesas
+
+| Campo | Valores | Significado |
+|---|---|---|
+| Categoria | Fixo / Variável | o valor se repete ou muda (ou é lançamento único) |
+| Recorrência | Mensal / Eventual | conta paga todo mês ou gasto que acontece ao longo do mês |
+
+Mudar nome, tipo, categoria ou recorrência vale para todos os lançamentos da mesma despesa; mudar o valor (reajuste) vale para o lançamento e os seguintes.
+
 ## Como o painel classifica
 
 Para cada lançamento do extrato, nesta ordem:

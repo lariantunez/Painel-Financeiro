@@ -5,11 +5,12 @@ import { carregarDados, dadosEmCache, config, importarConfiguracaoDoLink } from 
 import { renderPainel } from './pagina-painel.js';
 import { renderImportar, importacaoEmAndamento } from './pagina-importar.js';
 import { renderAprendizado } from './pagina-aprendizado.js';
+import { renderPrevisao } from './pagina-previsao.js';
 import { renderConfig } from './pagina-config.js';
 import { toast, $, $$ } from './ui.js';
 
 const ATUALIZAR_A_CADA = 2 * 60 * 1000; // 2 minutos, só com a aba visível
-const PAGINAS = { painel: renderPainel, importar: renderImportar, aprendizado: renderAprendizado, config: renderConfig };
+const PAGINAS = { painel: renderPainel, previsao: renderPrevisao, importar: renderImportar, aprendizado: renderAprendizado, config: renderConfig };
 
 const estado = {
   dados: null,

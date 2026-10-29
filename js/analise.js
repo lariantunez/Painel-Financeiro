@@ -64,6 +64,114 @@ export function lancamentosSeguintes(despesas, d) {
 
 export const RECORRENCIAS = ['MENSAL', 'EVENTUAL'];
 
+// ───────────── Previsão dos próximos meses ─────────────
+
+const ehParcelaCartao = (d) => {
+  const p = parcelaDe(d);
+  return Boolean(p && p.n > 1 && (RX_PARCELA.test(d.nome) || rotulo(d.forma).startsWith('CREDITO')));
+};
+
+const nomeComParcela = (d, k) => {
+  const p = parcelaDe(d);
+  if (!p) return d.nome;
+  return RX_PARCELA.test(d.nome) ? d.nome.replace(/Parcela\s+\d+\s*\/\s*\d+/i, `Parcela ${k}/${p.n}`) : `${d.nome} (${k}/${p.n})`;
+};
+
+// Gastos previstos mês a mês: contas mensais (lançadas ou pelo último valor) + parcelas do cartão
+// (lançadas ou restantes de cada compra) e receitas mensais previstas. Gastos eventuais não entram;
+// a média deles vai à parte como referência.
+export function previsao(dados, horizonte = 12, inicio = mesAtual()) {
+  const meses = Array.from({ length: horizonte }, (_, i) => somarMeses(inicio, i));
+  const itens = new Map(meses.map((m) => [m, []]));
+  const fim = meses[meses.length - 1];
+  const ativoDesde = somarMeses(inicio, -3); // conta que não aparece há mais de 3 meses é considerada encerrada
+
+  // 1. o que já está lançado nos meses da previsão
+  for (const d of dados.despesas) {
+    if (!itens.has(d.mesRef)) continue;
+    const grupo = ehParcelaCartao(d) ? 'parcela' : d.recorrencia === 'MENSAL' ? 'mensal' : null;
+    if (grupo) itens.get(d.mesRef).push({ nome: d.nome, tipo: d.tipo, valor: d.valor, grupo, origem: 'lancado', status: d.status });
+  }
+
+  // 2. contas mensais: último valor de cada uma, nos meses ainda sem lançamento
+  const ultimaMensal = new Map();
+  for (const d of dados.despesas) {
+    if (d.recorrencia !== 'MENSAL' || ehParcelaCartao(d) || !d.mesRef || d.mesRef > fim) continue;
+    const s = serieDe(d.nome);
+    const atual = ultimaMensal.get(s);
+    if (!atual || d.mesRef > atual.mesRef || (d.mesRef === atual.mesRef && d._linha > atual._linha)) ultimaMensal.set(s, d);
+  }
+  for (const d of ultimaMensal.values()) {
+    if (d.mesRef < ativoDesde || !(d.valor > 0)) continue;
+    const p = parcelaDe(d);
+    const restantes = p && p.n > 1 ? p.n - p.k : Infinity;
+    for (const m of meses) {
+      if (m <= d.mesRef) continue;
+      const passo = mesesEntre(d.mesRef, m);
+      if (passo > restantes) break;
+      itens.get(m).push({ nome: p && p.n > 1 ? nomeComParcela(d, p.k + passo) : d.nome, tipo: d.tipo, valor: d.valor, grupo: 'mensal', origem: 'previsto' });
+    }
+  }
+
+  // 3. parcelas do cartão: parcelas restantes de cada compra, a partir da última lançada.
+  // Agrupa pela "mesma compra" (tolera nome diferente entre meses e centavos a mais na 1ª parcela)
+  const parcelasCartao = dados.despesas
+    .filter((d) => ehParcelaCartao(d) && d.mesRef && d.mesRef <= fim)
+    .sort((a, b) => b.mesRef.localeCompare(a.mesRef) || parcelaDe(b).k - parcelaDe(a).k);
+  const vistas = new Set();
+  const ultimaParcela = [];
+  for (const d of parcelasCartao) {
+    if (vistas.has(d)) continue;
+    ultimaParcela.push(d); // a mais recente da compra
+    for (const x of parcelasDaMesmaCompra(parcelasCartao, d)) vistas.add(x);
+  }
+  for (const d of ultimaParcela) {
+    const p = parcelaDe(d);
+    for (let j = 1; j <= p.n - p.k; j++) {
+      const m = somarMeses(d.mesRef, j);
+      if (itens.has(m)) itens.get(m).push({ nome: nomeComParcela(d, p.k + j), tipo: d.tipo, valor: d.valor, grupo: 'parcela', origem: 'previsto' });
+    }
+  }
+
+  // 4. receitas: lançadas nos meses da previsão + receitas fixas pelo último mês em que apareceram
+  const receitas = new Map(meses.map((m) => [m, []]));
+  for (const r of dados.receitas) if (receitas.has(r.mesRef)) receitas.get(r.mesRef).push({ nome: r.tipo, quem: r.nome, valor: r.valor, origem: 'lancado' });
+  const ultimaReceita = new Map();
+  for (const r of dados.receitas) {
+    if (rotulo(r.categoria) !== 'FIXO' || !r.mesRef || r.mesRef > fim) continue;
+    const s = `${rotulo(r.tipo)}|${rotulo(r.nome)}`;
+    const atual = ultimaReceita.get(s);
+    if (!atual || r.mesRef > atual.mes) ultimaReceita.set(s, { mes: r.mesRef, linhas: [r] });
+    else if (r.mesRef === atual.mes) atual.linhas.push(r);
+  }
+  for (const { mes: ultimo, linhas } of ultimaReceita.values()) {
+    if (ultimo < ativoDesde) continue;
+    for (const m of meses) {
+      if (m <= ultimo) continue;
+      for (const r of linhas) receitas.get(m).push({ nome: r.tipo, quem: r.nome, valor: r.valor, origem: 'previsto' });
+    }
+  }
+
+  // média mensal dos gastos eventuais nos 6 meses anteriores (só referência)
+  const anteriores = Array.from({ length: 6 }, (_, i) => somarMeses(inicio, -(i + 1)));
+  const eventuais = dados.despesas.filter((d) => anteriores.includes(d.mesRef) && d.recorrencia !== 'MENSAL' && !ehParcelaCartao(d));
+  const mesesComDados = new Set(eventuais.map((d) => d.mesRef)).size || 1;
+  const mediaEventual = eventuais.reduce((s, d) => s + d.valor, 0) / mesesComDados;
+
+  const soma = (lista, grupo) => lista.filter((i) => !grupo || i.grupo === grupo).reduce((s, i) => s + i.valor, 0);
+  return {
+    mediaEventual,
+    meses: meses.map((m) => {
+      const lista = itens.get(m).sort((a, b) => b.valor - a.valor);
+      const rec = receitas.get(m);
+      const mensais = soma(lista, 'mensal');
+      const parcelas = soma(lista, 'parcela');
+      const receita = soma(rec);
+      return { mes: m, mensais, parcelas, total: mensais + parcelas, receita, saldo: receita - mensais - parcelas, itens: lista, receitas: rec };
+    }),
+  };
+}
+
 // Recorrência sugerida para lançamentos sem essa informação:
 // MENSAL = conta paga todo mês (fixa, financiamento/carnê fora do cartão, ou aparece 1x por mês em 3+ meses)
 // EVENTUAL = gasto que acontece ao longo do mês (compras, feira, restaurante, parcelas de compras no cartão)

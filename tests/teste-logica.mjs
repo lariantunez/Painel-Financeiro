@@ -8,7 +8,7 @@ import { criarClassificador, chaveDescricao, paraLinhasPlanilha, regrasAPartirDe
 import { normalizarDespesa, normalizarReceita } from '../js/model.js';
 import { montarFixas, fixasParaLinhas } from '../js/fixas.js';
 import { parseValor, parseMesRef } from '../js/util.js';
-import { parcelasDaMesmaCompra, nomeDaParcela, mesmaDespesa, lancamentosSeguintes, inferirRecorrencia } from '../js/analise.js';
+import { parcelasDaMesmaCompra, nomeDaParcela, mesmaDespesa, lancamentosSeguintes, inferirRecorrencia, previsao } from '../js/analise.js';
 
 let ok = 0;
 const teste = (nome, fn) => {
@@ -210,6 +210,18 @@ if (pasta) {
     assert.equal(de('Financiamento Apartamento'), 'MENSAL');
     assert.equal(de('Feira'), 'EVENTUAL'); // muitos meses, mas várias vezes por mês
     assert.equal(de('Amazon Monitores - Parcela 8/10'), 'EVENTUAL'); // parcela de compra no cartão
+  });
+  teste('Previsão: contas mensais pelo último valor + parcelas restantes, sem duplicar compra', () => {
+    const inf = inferirRecorrencia(despesas);
+    const comRec = despesas.map((d) => ({ ...d, recorrencia: inf.get(d) }));
+    const p = previsao({ despesas: comRec, receitas }, 12, '2026-10');
+    const out = p.meses[0];
+    assert.equal(out.itens.filter((i) => /Monitores/.test(i.nome)).length, 1); // 1ª parcela com outro nome não duplica
+    assert.ok(out.itens.some((i) => i.grupo === 'mensal' && i.nome === 'Condomínio' && i.valor === 728.72));
+    assert.ok(out.itens.some((i) => i.nome.startsWith('Financiamento Carro (23/63)')));
+    assert.ok(!out.itens.some((i) => i.valor === 0));
+    assert.ok(!p.meses[1].itens.some((i) => /Monitores/.test(i.nome))); // compra terminou em out/26
+    assert.ok(Math.abs(out.total - (out.mensais + out.parcelas)) < 0.01 && out.receita > 0);
   });
   teste('Parcela seguinte com mesmo valor não é duplicata', () => {
     const l = criarClassificador({ despesas, receitas }).classificarExtrato(lerExtrato('date,title,amount\n2026-09-07,LIVELO - NuPay - Parcela 2/10,"299,48"', 'f.csv'))[0];

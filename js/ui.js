@@ -69,20 +69,27 @@ function colunaArredondada(x, y, w, h, r = 4) {
 }
 
 // ───────────── Gráfico de colunas (agrupadas) ─────────────
-// opcoes: { rotulos[], series:[{nome, cor, valores[]}], selecionado (índice ou lista de índices), tooltip(i), onClick(i, evento), altura }
+// opcoes: { rotulos[], series:[{nome, cor, valores[], pilha?}], selecionado (índice ou lista de índices), tooltip(i), onClick(i, evento), altura }
+// Séries com o mesmo "pilha" ficam empilhadas na mesma coluna (na ordem dada, de baixo para cima)
 export function graficoColunas(container, opcoes) {
   const { rotulos, series, selecionado = -1, tooltip, onClick, altura = 220 } = opcoes;
   const destacados = new Set(Array.isArray(selecionado) ? selecionado : [selecionado]);
+  const colunas = [];
+  for (const s of series) {
+    const existente = s.pilha && colunas.find((c) => c.pilha === s.pilha);
+    if (existente) existente.series.push(s);
+    else colunas.push({ pilha: s.pilha, series: [s] });
+  }
   const largura = Math.max(300, container.clientWidth || 600);
   const margem = { t: 8, r: 4, b: 26, l: 52 };
   const plotW = largura - margem.l - margem.r;
   const plotH = altura - margem.t - margem.b;
-  const max = Math.max(0, ...series.flatMap((s) => s.valores));
+  const max = Math.max(0, ...rotulos.flatMap((_, i) => colunas.map((c) => c.series.reduce((t, s) => t + Math.max(0, s.valores[i] || 0), 0))));
   const { topo, passo } = escalaBonita(max);
   const y = (v) => margem.t + plotH - (Math.max(0, v) / topo) * plotH;
   const banda = plotW / rotulos.length;
-  const larguraBarra = Math.max(4, Math.min(24, (banda * 0.7 - 2 * (series.length - 1)) / series.length));
-  const grupo = larguraBarra * series.length + 2 * (series.length - 1);
+  const larguraBarra = Math.max(4, Math.min(24, (banda * 0.7 - 2 * (colunas.length - 1)) / colunas.length));
+  const grupo = larguraBarra * colunas.length + 2 * (colunas.length - 1);
 
   let svg = `<svg viewBox="0 0 ${largura} ${altura}" height="${altura}" role="img">`;
   for (let v = 0; v <= topo + 1e-9; v += passo) {
@@ -96,11 +103,21 @@ export function graficoColunas(container, opcoes) {
     svg += `<g class="alvo" data-i="${i}">`;
     svg += `<rect class="fundo-hover" x="${x0 + 1}" y="${margem.t}" width="${banda - 2}" height="${plotH}" rx="6" fill="${ativo ? 'var(--hover)' : 'transparent'}"/>`;
     const inicio = x0 + (banda - grupo) / 2;
-    series.forEach((s, j) => {
-      const v = s.valores[i] || 0;
-      const yy = y(v);
+    colunas.forEach((c, j) => {
       const xb = inicio + j * (larguraBarra + 2);
-      svg += `<path d="${colunaArredondada(xb, yy, larguraBarra, margem.t + plotH - yy)}" fill="${s.cor}"/>`;
+      const visiveis = c.series.filter((s) => (s.valores[i] || 0) > 0);
+      let acumulado = 0;
+      visiveis.forEach((s, k) => {
+        const base = y(acumulado);
+        acumulado += s.valores[i];
+        const topoSeg = y(acumulado);
+        // 2px de respiro entre segmentos empilhados; só o de cima tem a ponta arredondada
+        const altSeg = base - topoSeg - (k > 0 ? 2 : 0);
+        if (altSeg <= 0) return;
+        svg += k === visiveis.length - 1
+          ? `<path d="${colunaArredondada(xb, topoSeg, larguraBarra, altSeg)}" fill="${s.cor}"/>`
+          : `<rect x="${xb}" y="${topoSeg}" width="${larguraBarra}" height="${altSeg}" fill="${s.cor}"/>`;
+      });
     });
     const pular = banda < 40 && i % 2 !== (rotulos.length - 1) % 2 && !ativo;
     if (!pular) svg += `<text x="${x0 + banda / 2}" y="${altura - 8}" text-anchor="middle" font-size="11" fill="var(${ativo ? '--text' : '--muted'})" font-weight="${ativo ? 600 : 400}">${escapeHtml(rot)}</text>`;

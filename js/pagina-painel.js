@@ -470,6 +470,7 @@ function renderPorTipo(el, dados, mes, filtros) {
         <span class="barra-trilho">
           ${t.media ? `<span class="barra-media-fundo" style="width:${(t.media / max) * 100}%"></span>` : ''}
           <span class="barra-fill" style="width:${(Math.max(0, t.valor) / max) * 100}%"></span>
+          ${t.media ? `<span class="barra-media" style="left:calc(${(t.media / max) * 100}% - 1px)"></span>` : ''}
                   </span>
         <span class="valores num">${moeda(t.valor)}<span class="muted">${difTxt}</span></span>
       </button>`;

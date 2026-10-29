@@ -352,6 +352,7 @@ h2.filtravel.filtro-ativo { margin: -1px -4px; }
 /* média dos 6 meses: barra cinza de fundo; o mês atual é a barra fina por cima */
 .barra-media-fundo { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 0 4px 4px 0; background: var(--media-fundo); }
 .barra-fill { position: absolute; left: 0; top: 4px; bottom: 4px; border-radius: 0 3px 3px 0; background: var(--despesa); min-width: 2px; }
+.barra-media { position: absolute; top: -2px; bottom: -2px; width: 2px; background: var(--text); border-radius: 1px; } /* tracinho na ponta da média */
 .barra-linha .valores { font-size: 13px; text-align: right; white-space: nowrap; }
 .barra-linha .valores .muted { font-size: 11px; margin-left: 6px; }
 

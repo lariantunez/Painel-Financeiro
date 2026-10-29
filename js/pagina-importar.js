@@ -257,11 +257,11 @@ function passoFixas(el, app) {
     </div>
 
     ${
-      f.receitas.length
+      f.receitas.length || f.receitasViaExtrato.length
         ? `<div class="card">
       <div class="card-titulo"><h2>Receitas mensais · ${nomeMes(imp.mesFixas)}</h2><span class="sub">Salários e outras entradas recorrentes</span></div>
       ${f.receitas.map((x, i) => linhaReceitaFixa(x, i)).join('')}
-      ${f.receitasViaExtrato.length ? `<p class="small muted" style="margin:14px 0 0">Chegam pelo extrato da conta e são reconhecidas na importação: ${f.receitasViaExtrato.map(escapeHtml).join(', ')}.</p>` : ''}
+      ${f.receitasViaExtrato.length ? `<p class="small muted" style="margin:${f.receitas.length ? '14px' : '0'} 0 0">${f.receitas.length ? '' : '✓ Nada para lançar à mão. '}Chegam pelo extrato da conta e são reconhecidas na importação: ${f.receitasViaExtrato.map(escapeHtml).join(', ')}.</p>` : ''}
     </div>`
         : ''
     }

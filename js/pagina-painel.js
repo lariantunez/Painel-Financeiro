@@ -149,6 +149,7 @@ function avisos(app, problemas) {
 }
 
 function delta(atual, anterior, subirEhBom) {
+  if (!atual) return '<span class="muted">nenhum lançamento ainda</span>';
   if (!anterior) return '<span class="muted">sem dados no mês anterior</span>';
   const d = (atual - anterior) / Math.abs(anterior);
   const subiu = d >= 0;
@@ -166,6 +167,9 @@ function kpi(rotuloKpi, cor, valor, anterior, info, subirEhBom) {
 }
 
 function kpiSaldo(t) {
+  if (!t.qtdReceitas && !t.qtdDespesas) {
+    return '<div class="card kpi"><div class="rotulo">Saldo do mês</div><div class="valor muted">—</div><div class="delta">mês ainda sem lançamentos</div></div>';
+  }
   const positivo = t.saldo >= 0;
   return `<div class="card kpi">
     <div class="rotulo">Saldo do mês</div>

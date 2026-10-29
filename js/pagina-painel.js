@@ -231,7 +231,7 @@ export function renderPainel(raiz, app) {
       <div class="card c-7">
         <div class="card-titulo">
           <h2>Despesas por tipo</h2>
-          ${legenda([[COR_D, varios ? 'No período' : 'Este mês'], ['tick', varios ? 'Média de 6 meses (mesma duração)' : 'Média 6 meses']])}
+          ${legenda([[COR_D, varios ? 'No período' : 'Este mês'], ['var(--media-fundo)', varios ? 'Média de 6 meses (mesma duração)' : 'Média 6 meses']])}
         </div>
         <div id="por-tipo"></div>
       </div>
@@ -468,9 +468,9 @@ function renderPorTipo(el, dados, mes, filtros) {
       return `<button class="barra-linha ${apagadoNoFiltro('tipo', t.tipo) ? 'apagada' : ''}" data-tipo="${escapeHtml(t.tipo)}" ${filtravel('tipo', t.tipo)}>
         <span class="nome">${escapeHtml(t.tipo)}</span>
         <span class="barra-trilho">
+          ${t.media ? `<span class="barra-media-fundo" style="width:${(t.media / max) * 100}%"></span>` : ''}
           <span class="barra-fill" style="width:${(Math.max(0, t.valor) / max) * 100}%"></span>
-          ${t.media ? `<span class="barra-media" style="left:calc(${(t.media / max) * 100}% - 1px)"></span>` : ''}
-        </span>
+                  </span>
         <span class="valores num">${moeda(t.valor)}<span class="muted">${difTxt}</span></span>
       </button>`;
     })

@@ -20,6 +20,7 @@
   --despesa: #e34948;
   --neutro: #b9b8b0;
   --serie-3: #6250d6;
+  --media-fundo: #e4e3dc;
 
   --good: #0ca30c;
   --good-text: #006300;
@@ -57,6 +58,7 @@
     --despesa: #e66767;
     --neutro: #55554f;
     --serie-3: #9085e9;
+    --media-fundo: #3a3a37;
     --good-text: #0ca30c;
     --good-soft: #15291a;
     --warning-soft: #2e2614;
@@ -84,6 +86,7 @@
   --despesa: #e66767;
   --neutro: #55554f;
   --serie-3: #9085e9;
+  --media-fundo: #3a3a37;
   --good-text: #0ca30c;
   --good-soft: #15291a;
   --warning-soft: #2e2614;
@@ -345,9 +348,10 @@ h2.filtravel.filtro-ativo { margin: -1px -4px; }
 .barra-linha:hover { background: var(--hover); }
 .barra-linha.apagada { opacity: 0.35; }
 .barra-linha .nome { font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.barra-trilho { position: relative; height: 14px; }
-.barra-fill { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 0 4px 4px 0; background: var(--despesa); min-width: 2px; }
-.barra-media { position: absolute; top: -3px; bottom: -3px; width: 2px; background: var(--text); border-radius: 1px; }
+.barra-trilho { position: relative; height: 16px; }
+/* média dos 6 meses: barra cinza de fundo; o mês atual é a barra fina por cima */
+.barra-media-fundo { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 0 4px 4px 0; background: var(--media-fundo); }
+.barra-fill { position: absolute; left: 0; top: 4px; bottom: 4px; border-radius: 0 3px 3px 0; background: var(--despesa); min-width: 2px; }
 .barra-linha .valores { font-size: 13px; text-align: right; white-space: nowrap; }
 .barra-linha .valores .muted { font-size: 11px; margin-left: 6px; }
 

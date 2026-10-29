@@ -1,11 +1,11 @@
 // Tela principal: visão do mês.
 
-import { moeda, pct, nomeMes, somarMeses, MESES, MESES_LONGOS, escapeHtml, rotulo, mesAtual, RX_PARCELA, parseValor, arred, rotuloPeriodo } from './util.js';
+import { moeda, pct, nomeMes, somarMeses, MESES, MESES_LONGOS, escapeHtml, rotulo, mesAtual, RX_PARCELA, parseValor, arred, rotuloPeriodo, mesRefBR } from './util.js';
 import { totaisMes, serieMeses, porTipo, fixoVariavel, contasAPagar, parcelamentos, maioresGastos, qualidade, tipoDe, mesmaDespesa, lancamentosSeguintes, nomeDaParcela, periodoAnterior, FILTROS, filtrarDespesas, mesesDoAno, somarPor, receitasDoAno, coresDosTipos, segmentosPorTipo, OUTROS } from './analise.js';
 import { sparkline, linhasSuaves, rosca, aneis } from './graficos.js';
 import { serieDe } from './fixas.js';
 import { graficoColunas, responsivo, legenda, linhaTooltip, mostrarTooltip, esconderTooltip, toast, $, $$, cabecalho, ordenar, ligarOrdenacao, dataOrdenavel } from './ui.js';
-import { backendConfigurado, enviar } from './api.js';
+import { backendConfigurado, enviar, config } from './api.js';
 import { valoresUsados, regraParaLinha } from './model.js';
 import { chaveDescricao, ehMarketplace } from './classifier.js';
 
@@ -22,6 +22,7 @@ let abaTabela = 'despesas';
 let classificandoSemTipo = false;
 let parcelasAbertas = false;
 let editando = null; // linha da planilha em edição na tabela
+let editandoReceita = null; // idem, na aba Receitas (as linhas das duas abas se repetem)
 let ctxTabela = null;
 let busca = '';
 let tipoDetalhe = null; // tipo escolhido no quadro "Detalhamento de despesas"
@@ -50,13 +51,14 @@ const VALOR_DESPESA = {
   valor: (d) => d.valor,
 };
 const COLS_RECEITAS = [
+  { id: 'mes', rotulo: 'Mês', desc: true },
   { id: 'quem', rotulo: 'Quem' },
   { id: 'tipo', rotulo: 'Descrição' },
   { id: 'instituicao', rotulo: 'Instituição', classe: 'opc' },
   { id: 'forma', rotulo: 'Forma', classe: 'opc' },
   { id: 'valor', rotulo: 'Valor', classe: 'num', desc: true },
 ];
-const VALOR_RECEITA = { quem: (r) => r.nome, tipo: (r) => r.tipo, instituicao: (r) => r.instituicao, forma: (r) => r.forma, valor: (r) => r.valor };
+const VALOR_RECEITA = { mes: (r) => r.mesRef, quem: (r) => r.nome, tipo: (r) => r.tipo, instituicao: (r) => r.instituicao, forma: (r) => r.forma, valor: (r) => r.valor };
 const COLS_PARCELAS = [
   { id: 'nome', rotulo: 'Compra' },
   { id: 'parcela', rotulo: 'Parcela' },
@@ -732,12 +734,15 @@ function renderTabela(el, t) {
     ligarEdicao(el, t, linhas);
     ligarSeletores(el, linhas);
   } else {
-    const linhas = ordenar(t.receitas.filter((r) => filtra([r.nome, r.tipo, r.instituicao])), ordem.receitas, VALOR_RECEITA);
+    const linhas = ordenar(t.receitas.filter((r) => filtra([r.nome, r.tipo, r.instituicao, r.forma, r.descOriginal])), ordem.receitas, VALOR_RECEITA);
+    const editavel = backendConfigurado();
+    const colunas = editavel ? [...COLS_RECEITAS, { id: '', rotulo: '' }] : COLS_RECEITAS;
     el.innerHTML = linhas.length
-      ? `<table class="tabela">${cabecalho(COLS_RECEITAS, ordem.receitas)}<tbody>
-        ${linhas.map((r) => `<tr><td>${escapeHtml(r.nome)}</td><td>${escapeHtml(r.tipo)}</td><td class="text-2 opc">${escapeHtml(r.instituicao)}</td><td class="text-2 opc">${escapeHtml(r.forma)}</td><td class="num">${moeda(r.valor)}</td></tr>`).join('')}</tbody></table>`
+      ? `<table class="tabela">${cabecalho(colunas, ordem.receitas)}<tbody>
+        ${linhas.map((r) => (editavel && editandoReceita === r._linha ? receitaEmEdicao(r) : linhaReceita(r, editavel))).join('')}</tbody></table>`
       : '<div class="vazio">Nenhuma receita encontrada.</div>';
     ligarOrdenacao(el, COLS_RECEITAS, ordem.receitas, redesenhar);
+    ligarEdicaoReceita(el, t, linhas);
   }
   atualizarBotaoLimpar(ctxTabela?.app.estado);
 }
@@ -934,6 +939,126 @@ function ligarEdicao(el, t, linhas) {
   };
   $('#edit-salvar', el).addEventListener('click', salvar);
   $('#edit-cancelar', el).addEventListener('click', cancelar);
+  for (const campo of $$('.edicao input:not([type=checkbox])', el)) {
+    campo.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') salvar();
+      if (e.key === 'Escape') cancelar();
+    });
+  }
+}
+
+// ───────────── Receitas ─────────────
+// Quem, descrição e categoria são classificação: valem para as receitas com a mesma descrição do banco
+// (e viram regra no Aprendizado). Valor, mês, instituição e forma: só esta receita.
+
+const chaveReceita = (r) => (r.descOriginal ? `+ ${chaveDescricao(r.descOriginal)}` : '');
+const receitasIguais = (r) => {
+  const chave = chaveReceita(r);
+  return chave ? ctxTabela.app.estado.dados.receitas.filter((x) => chaveReceita(x) === chave) : [r];
+};
+
+function linhaReceita(r, editavel) {
+  const desc = r.descOriginal && r.descOriginal !== r.tipo ? `<span class="desc-original">${escapeHtml(r.descOriginal)}</span>` : '';
+  const mes = r.mesRef ? `${MESES[+r.mesRef.slice(5) - 1]}/${r.mesRef.slice(2, 4)}` : '';
+  return `<tr><td class="tab">${mes}</td><td>${escapeHtml(r.nome)}</td><td>${escapeHtml(r.tipo)}${desc}</td><td class="text-2 opc">${escapeHtml(r.instituicao)}</td><td class="text-2 opc">${escapeHtml(r.forma)}</td><td class="num">${moeda(r.valor)}</td>
+    ${editavel ? `<td class="acao-linha"><button class="btn btn-ghost btn-icone btn-sm" data-editar-receita="${r._linha}" aria-label="Editar ${escapeHtml(r.tipo)}" title="Editar" aria-expanded="${editandoReceita === r._linha}">✎</button></td>` : ''}</tr>`;
+}
+
+function receitaEmEdicao(r) {
+  const receitas = ctxTabela.app.estado.dados.receitas;
+  const lista = (campo, extras = []) => [...new Set([...extras, ...valoresUsados(receitas, campo)].filter(Boolean))];
+  const opcoes = (valores, atual) => `${atual && !valores.includes(atual) ? `<option selected>${escapeHtml(atual)}</option>` : ''}${valores.map((v) => `<option ${v === atual ? 'selected' : ''}>${escapeHtml(v)}</option>`).join('')}`;
+  const pessoas = lista('nome', [...PESSOAS, ...Object.values(config.titulares || {})]);
+  const meses = Array.from({ length: 7 }, (_, i) => somarMeses(r.mesRef, i - 3));
+  const iguais = receitasIguais(r).length - 1;
+  const alcance = iguais > 0
+    ? `<div class="edicao-alcance">Quem, descrição e categoria: esta e mais <b>${iguais}</b> receita(s) com a mesma descrição do banco. Valor, mês, instituição e forma: só esta.
+        <label><input type="checkbox" id="rec-so"> Só nesta receita</label></div>`
+    : '';
+  return `${linhaReceita(r, true).replace('<tr>', '<tr class="em-edicao">')}
+    <tr class="editando"><td colspan="${COLS_RECEITAS.length + 1}">
+      <div class="edicao">
+        <label class="campo edicao-nome">Descrição<input class="input input-sm" id="rec-tipo" list="dl-rec-tipos" value="${escapeHtml(r.tipo)}">
+          <datalist id="dl-rec-tipos">${lista('tipo').map((v) => `<option value="${escapeHtml(v)}">`).join('')}</datalist>
+          ${r.descOriginal ? `<span class="dica">No banco: ${escapeHtml(r.descOriginal)}</span>` : ''}</label>
+        <label class="campo">Quem recebe<select class="select select-sm" id="rec-nome">${opcoes(pessoas, r.nome)}</select></label>
+        <label class="campo">Valor<input class="input input-sm num" id="rec-valor" inputmode="decimal" value="${r.valor.toFixed(2).replace('.', ',')}"></label>
+        <label class="campo">Mês de referência<select class="select select-sm" id="rec-mes">${meses.map((m) => `<option value="${m}" ${m === r.mesRef ? 'selected' : ''}>${nomeMes(m)}</option>`).join('')}</select></label>
+        <label class="campo">Instituição<select class="select select-sm" id="rec-instituicao">${opcoes(lista('instituicao', ['NUBANK', 'BRADESCO', 'ITAÚ']), r.instituicao)}</select></label>
+        <label class="campo">Forma<select class="select select-sm" id="rec-forma">${opcoes(lista('forma', ['PIX', 'DEPÓSITO EM CONTA']), r.forma)}</select></label>
+        <label class="campo">Categoria<select class="select select-sm" id="rec-categoria">${opcoes(['FIXO', 'VARIÁVEL'], r.categoria)}</select></label>
+      </div>
+      <div class="edicao-rodape">${alcance}<div class="edicao-acoes"><button class="btn btn-sm" id="rec-cancelar">Cancelar</button><button class="btn btn-sm btn-primario" id="rec-salvar">Salvar</button></div></div>
+    </td></tr>`;
+}
+
+const COLUNA_RECEITA = { tipo: 'TIPO', nome: 'NOME', valor: 'VALOR', mesRef: 'MES_DE_REFERENCIA', instituicao: 'INSTITUICAO_FINANCEIRA', forma: 'FORMA_DE_PGTO', categoria: 'CATEGORIA' };
+
+function ligarEdicaoReceita(el, t, linhas) {
+  for (const b of $$('[data-editar-receita]', el)) {
+    b.addEventListener('click', () => {
+      editandoReceita = editandoReceita === +b.dataset.editarReceita ? null : +b.dataset.editarReceita;
+      renderTabela(el, t);
+      $('#rec-tipo', el)?.focus();
+    });
+  }
+  const r = linhas.find((x) => x._linha === editandoReceita);
+  if (!r || !$('#rec-salvar', el)) return;
+  const cancelar = () => {
+    editandoReceita = null;
+    renderTabela(el, t);
+  };
+  const salvar = async () => {
+    const novo = {
+      tipo: $('#rec-tipo', el).value.trim(),
+      nome: $('#rec-nome', el).value,
+      valor: arred(parseValor($('#rec-valor', el).value)),
+      mesRef: $('#rec-mes', el).value,
+      instituicao: $('#rec-instituicao', el).value,
+      forma: $('#rec-forma', el).value,
+      categoria: $('#rec-categoria', el).value,
+    };
+    const so = $('#rec-so', el)?.checked;
+    const mudou = (campo, x = r) => (campo === 'valor' ? $('#rec-valor', el).value.trim() !== '' && Math.abs(novo.valor - x.valor) > 0.004 : Boolean(novo[campo]) && novo[campo] !== x[campo]);
+    const porLinha = new Map();
+    const marcar = (x, campo) => porLinha.set(x, { ...porLinha.get(x), [campo]: novo[campo] });
+    for (const x of so ? [r] : receitasIguais(r)) for (const campo of ['tipo', 'nome', 'categoria']) if (mudou(campo) && mudou(campo, x)) marcar(x, campo);
+    for (const campo of ['valor', 'mesRef', 'instituicao', 'forma']) if (mudou(campo)) marcar(r, campo);
+    if (!porLinha.size) return cancelar();
+
+    const botao = $('#rec-salvar', el);
+    botao.disabled = true;
+    botao.textContent = 'Salvando…';
+    try {
+      const alteracoes = [...porLinha].map(([x, c]) => ({
+        aba: 'receitas',
+        linha: x._linha,
+        nome: x.tipo, // o backend confere a coluna TIPO para saber que a linha não mudou
+        campos: Object.fromEntries(Object.entries(c).map(([k, v]) => [COLUNA_RECEITA[k], k === 'mesRef' ? mesRefBR(v) : v])),
+      }));
+      const resp = await enviar('status', { alteracoes });
+      if (resp.erros?.length && !resp.alteradas) throw new Error(resp.erros[0]);
+      if (resp.erros?.length) toast(`Algumas receitas não foram atualizadas: ${resp.erros[0]}`, 'erro', 8000);
+      // classificação aprendida: as próximas importações já chegam assim
+      const chave = chaveReceita(r);
+      if (!so && chave && (mudou('tipo') || mudou('nome') || mudou('categoria'))) {
+        const atual = ctxTabela.app.estado.dados.regras.find((x) => x.chave === chave);
+        const base = atual || { chave, destino: 'RECEITA', recorrencia: '', perguntar: false, usos: 1 };
+        const regra = { ...base, nome: novo.tipo || r.tipo, tipo: novo.tipo || r.tipo, categoria: novo.categoria || r.categoria, titular: novo.nome || r.nome };
+        await enviar('regras', { regras: [regraParaLinha(regra)] });
+      }
+      for (const [x, c] of porLinha) Object.assign(x, c);
+      editandoReceita = null;
+      toast(porLinha.size > 1 ? `${porLinha.size} receitas atualizadas na planilha` : 'Receita atualizada na planilha');
+      ctxTabela.app.recarregar();
+    } catch (err) {
+      toast(err.message, 'erro', 6000);
+      botao.disabled = false;
+      botao.textContent = 'Salvar';
+    }
+  };
+  $('#rec-salvar', el).addEventListener('click', salvar);
+  $('#rec-cancelar', el).addEventListener('click', cancelar);
   for (const campo of $$('.edicao input:not([type=checkbox])', el)) {
     campo.addEventListener('keydown', (e) => {
       if (e.key === 'Enter') salvar();

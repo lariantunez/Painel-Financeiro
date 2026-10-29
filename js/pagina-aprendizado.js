@@ -4,7 +4,28 @@ import { escapeHtml, rotulo, somarMeses, mesAtual } from './util.js';
 import { CATEGORIAS } from './classifier.js';
 import { valoresUsados, regraParaLinha } from './model.js';
 import { backendConfigurado, enviar, salvarRegrasLocais } from './api.js';
-import { toast, $, $$ } from './ui.js';
+import { toast, $, $$, cabecalho, ordenar, ligarOrdenacao } from './ui.js';
+
+const COLUNAS = [
+  { id: 'chave', rotulo: 'Como aparece no banco' },
+  { id: 'destino', rotulo: 'Vira' },
+  { id: 'nome', rotulo: 'Nome na planilha' },
+  { id: 'tipo', rotulo: 'Tipo' },
+  { id: 'categoria', rotulo: 'Categoria' },
+  { id: 'perguntar', rotulo: 'Perguntar', desc: true },
+  { id: 'usos', rotulo: 'Usos', classe: 'num', desc: true },
+  { id: '', rotulo: '' },
+];
+const VALOR = {
+  chave: (r) => r.chave.replace(/^\+ /, ''),
+  destino: (r) => r.destino,
+  nome: (r) => r.nome,
+  tipo: (r) => r.tipo,
+  categoria: (r) => r.categoria,
+  perguntar: (r) => (r.perguntar ? 1 : 0),
+  usos: (r) => r.usos,
+};
+const ordem = { col: 'usos', dir: -1 };
 
 let busca = '';
 let alteradas = new Map();
@@ -19,7 +40,7 @@ export function renderAprendizado(raiz, app) {
   const tipos = valoresUsados(dados.despesas.filter((d) => d.mesRef >= somarMeses(mesAtual(), -12)), 'tipo').sort((a, b) => a.localeCompare(b, 'pt-BR'));
   const regras = dados.regras.filter((r) => !excluidas.has(r.chave)).map((r) => alteradas.get(r.chave) || r);
   const termo = rotulo(busca);
-  const visiveis = regras.filter((r) => !termo || rotulo(`${r.chave} ${r.nome} ${r.tipo}`).includes(termo)).sort((a, b) => b.usos - a.usos || a.chave.localeCompare(b.chave));
+  const visiveis = ordenar(regras.filter((r) => !termo || rotulo(`${r.chave} ${r.nome} ${r.tipo}`).includes(termo)), ordem, VALOR);
   const pendente = alteradas.size + excluidas.size;
 
   raiz.innerHTML = `
@@ -36,7 +57,7 @@ export function renderAprendizado(raiz, app) {
       <div class="ferramentas"><input class="input input-sm" id="busca-regra" placeholder="Buscar…" value="${escapeHtml(busca)}"></div>
       ${
         visiveis.length
-          ? `<div class="tabela-wrap"><table class="tabela"><thead><tr><th>Como aparece no banco</th><th>Vira</th><th>Nome na planilha</th><th>Tipo</th><th>Categoria</th><th title="Sempre perguntar">Perguntar</th><th class="num">Usos</th><th></th></tr></thead><tbody>
+          ? `<div class="tabela-wrap"><table class="tabela">${cabecalho(COLUNAS, ordem)}<tbody>
         ${visiveis.map((r) => linha(r, tipos)).join('')}</tbody></table></div>`
           : `<div class="vazio">${regras.length ? 'Nada encontrado.' : 'Ainda não há regras. Elas são criadas na sua primeira importação.'}</div>`
       }
@@ -50,6 +71,7 @@ export function renderAprendizado(raiz, app) {
     novo.focus();
     novo.setSelectionRange(pos, pos);
   });
+  ligarOrdenacao(raiz, COLUNAS, ordem, () => renderAprendizado(raiz, app));
   $('#descartar', raiz)?.addEventListener('click', () => {
     alteradas = new Map();
     excluidas = new Set();

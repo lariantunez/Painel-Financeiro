@@ -124,6 +124,56 @@ export function legenda(itens) {
     .join('')}</div>`;
 }
 
+// ───────────── Tabelas ordenáveis ─────────────
+// colunas: [{ id, rotulo, classe, desc }] — id vazio = coluna sem ordenação; desc = 1º clique decrescente
+// ordem: { col, dir } (dir 1 = crescente, -1 = decrescente), guardado por quem chama
+
+export function cabecalho(colunas, ordem) {
+  return `<thead><tr>${colunas
+    .map(({ id, rotulo, classe = '' }) => {
+      if (!id) return `<th class="${classe}">${rotulo}</th>`;
+      const ativa = ordem.col === id;
+      const sort = ativa ? (ordem.dir === 1 ? 'ascending' : 'descending') : 'none';
+      return `<th class="${classe}" data-ordenar="${id}" aria-sort="${sort}" tabindex="0">${rotulo}<span class="seta">${ativa ? (ordem.dir === 1 ? '▲' : '▼') : ''}</span></th>`;
+    })
+    .join('')}</tr></thead>`;
+}
+
+export function ordenar(lista, ordem, valorDe) {
+  const pegar = valorDe[ordem.col];
+  if (!pegar) return lista;
+  const colador = new Intl.Collator('pt-BR', { sensitivity: 'base', numeric: true });
+  return [...lista].sort((a, b) => {
+    const va = pegar(a);
+    const vb = pegar(b);
+    const vazioA = va === '' || va === null || va === undefined;
+    const vazioB = vb === '' || vb === null || vb === undefined;
+    if (vazioA || vazioB) return vazioA - vazioB; // vazios sempre no fim
+    const r = typeof va === 'number' && typeof vb === 'number' ? va - vb : colador.compare(String(va), String(vb));
+    return r * ordem.dir;
+  });
+}
+
+export function ligarOrdenacao(el, colunas, ordem, redesenhar) {
+  for (const th of $$('[data-ordenar]', el)) {
+    const trocar = () => {
+      const col = th.dataset.ordenar;
+      if (ordem.col === col) ordem.dir *= -1;
+      else Object.assign(ordem, { col, dir: colunas.find((c) => c.id === col)?.desc ? -1 : 1 });
+      redesenhar();
+    };
+    th.addEventListener('click', trocar);
+    th.addEventListener('keydown', (e) => (e.key === 'Enter' || e.key === ' ') && (e.preventDefault(), trocar()));
+  }
+}
+
+// Data "dd/mm/aaaa" (ou ISO) como número ordenável
+export function dataOrdenavel(texto) {
+  const m = String(texto || '').match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})|^(\d{4})-(\d{2})-(\d{2})/);
+  if (!m) return '';
+  return m[1] ? (m[3].length === 2 ? 2000 + +m[3] : +m[3]) * 10000 + +m[2] * 100 + +m[1] : +m[4] * 10000 + +m[5] * 100 + +m[6];
+}
+
 // Redesenha gráficos quando a largura muda
 const observados = new WeakMap();
 const observer = typeof ResizeObserver !== 'undefined'

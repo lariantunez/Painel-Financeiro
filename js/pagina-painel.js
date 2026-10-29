@@ -1,8 +1,8 @@
 // Tela principal: visão do mês.
 
-import { moeda, pct, nomeMes, somarMeses, MESES, escapeHtml, rotulo, parseData, mesAtual, RX_PARCELA } from './util.js';
+import { moeda, pct, nomeMes, somarMeses, MESES, escapeHtml, rotulo, mesAtual, RX_PARCELA } from './util.js';
 import { totaisMes, serieMeses, porTipo, fixoVariavel, contasAPagar, parcelamentos, maioresGastos, qualidade, tipoDe, parcelasDaMesmaCompra, nomeDaParcela } from './analise.js';
-import { graficoColunas, responsivo, legenda, linhaTooltip, mostrarTooltip, esconderTooltip, toast, $, $$ } from './ui.js';
+import { graficoColunas, responsivo, legenda, linhaTooltip, mostrarTooltip, esconderTooltip, toast, $, $$, cabecalho, ordenar, ligarOrdenacao, dataOrdenavel } from './ui.js';
 import { backendConfigurado, enviar } from './api.js';
 import { valoresUsados, regraParaLinha } from './model.js';
 import { chaveDescricao, ehMarketplace } from './classifier.js';
@@ -11,9 +11,51 @@ const COR_R = 'var(--receita)';
 const COR_D = 'var(--despesa)';
 let abaTabela = 'despesas';
 let classificandoSemTipo = false;
+let parcelasAbertas = false;
 let editando = null; // linha da planilha em edição na tabela
 let ctxTabela = null;
 let busca = '';
+
+// Colunas ordenáveis (clique no título); a ordem escolhida fica guardada enquanto a página está aberta
+const COLS_DESPESAS = [
+  { id: 'data', rotulo: 'Data', desc: true },
+  { id: 'nome', rotulo: 'Descrição' },
+  { id: 'tipo', rotulo: 'Tipo' },
+  { id: 'forma', rotulo: 'Forma', classe: 'opc' },
+  { id: 'parcela', rotulo: 'Parcela', classe: 'opc' },
+  { id: 'status', rotulo: 'Status', classe: 'opc' },
+  { id: 'valor', rotulo: 'Valor', classe: 'num', desc: true },
+];
+const VALOR_DESPESA = {
+  data: (d) => dataOrdenavel(d.vencimento),
+  nome: (d) => d.nome,
+  tipo: (d) => d.tipo,
+  forma: (d) => d.forma,
+  parcela: (d) => (d.parcelas && d.parcelas !== '1/1' ? d.parcelas : ''),
+  status: (d) => rotulo(d.status),
+  valor: (d) => d.valor,
+};
+const COLS_RECEITAS = [
+  { id: 'quem', rotulo: 'Quem' },
+  { id: 'tipo', rotulo: 'Descrição' },
+  { id: 'instituicao', rotulo: 'Instituição', classe: 'opc' },
+  { id: 'forma', rotulo: 'Forma', classe: 'opc' },
+  { id: 'valor', rotulo: 'Valor', classe: 'num', desc: true },
+];
+const VALOR_RECEITA = { quem: (r) => r.nome, tipo: (r) => r.tipo, instituicao: (r) => r.instituicao, forma: (r) => r.forma, valor: (r) => r.valor };
+const COLS_PARCELAS = [
+  { id: 'nome', rotulo: 'Compra' },
+  { id: 'parcela', rotulo: 'Parcela' },
+  { id: 'valor', rotulo: 'Valor', classe: 'num', desc: true },
+  { id: 'restante', rotulo: 'Falta pagar', classe: 'num', desc: true },
+  { id: 'termina', rotulo: 'Termina' },
+];
+const VALOR_PARCELA = { nome: (a) => a.nome, parcela: (a) => a.n - a.k, valor: (a) => a.valor, restante: (a) => a.restante, termina: (a) => a.termina };
+const ordem = {
+  despesas: { col: 'data', dir: -1 },
+  receitas: { col: 'valor', dir: -1 },
+  parcelas: { col: 'restante', dir: -1 },
+};
 
 export function renderPainel(raiz, app) {
   const { dados, mes, filtroTipo } = app.estado;
@@ -164,10 +206,10 @@ function painelSemTipo(lista, dados) {
   const tipos = valoresUsados(dados.despesas, 'tipo').sort((a, b) => a.localeCompare(b, 'pt-BR'));
   return `<div class="card" style="margin-bottom:16px">
     <div class="card-titulo"><h2>Classificar despesas sem tipo</h2><span class="sub">A alteração vai direto para a planilha</span></div>
-    <div class="tabela-wrap"><table class="tabela"><thead><tr><th>Data</th><th>Descrição</th><th class="opc">Forma</th><th class="num">Valor</th><th>Tipo</th></tr></thead><tbody>
+    <div class="tabela-wrap"><table class="tabela"><thead><tr><th>Data</th><th>Nome</th><th class="opc">Forma</th><th class="num">Valor</th><th>Tipo</th></tr></thead><tbody>
     ${lista
       .map(
-        (d, i) => `<tr><td class="tab">${escapeHtml(d.vencimento)}</td><td>${escapeHtml(d.nome)}<span class="desc-original">linha ${d._linha} · ${nomeMes(d.mesRef, false)}</span></td>
+        (d, i) => `<tr><td class="tab">${escapeHtml(d.vencimento)}</td><td><input class="input input-sm" data-sem-tipo-nome="${i}" value="${escapeHtml(d.nome)}" aria-label="Nome da despesa"><span class="desc-original">linha ${d._linha} · ${nomeMes(d.mesRef, false)}${d.descOriginal ? ` · no banco: ${escapeHtml(d.descOriginal)}` : ''}</span></td>
         <td class="text-2 opc">${escapeHtml(d.forma)}</td><td class="num">${moeda(d.valor)}</td>
         <td><select class="select select-sm" data-sem-tipo="${i}" aria-label="Tipo de ${escapeHtml(d.nome)}"><option value="">Escolha…</option>${tipos.map((t) => `<option>${escapeHtml(t)}</option>`).join('')}</select></td></tr>`
       )
@@ -188,18 +230,25 @@ function ligarSemTipo(raiz, lista, app) {
   });
   $('#salvar-sem-tipo', raiz)?.addEventListener('click', async (e) => {
     const escolhas = $$('[data-sem-tipo]', raiz)
-      .filter((s) => s.value)
-      .map((s) => ({ d: lista[+s.dataset.semTipo], tipo: s.value }));
+      .map((s) => {
+        const d = lista[+s.dataset.semTipo];
+        const nome = $(`[data-sem-tipo-nome="${s.dataset.semTipo}"]`, raiz).value.trim();
+        const campos = {};
+        if (s.value) campos.TIPO = s.value;
+        if (nome && nome !== d.nome) campos.NOME_DESPESA = nome;
+        return { d, campos };
+      })
+      .filter(({ campos }) => Object.keys(campos).length);
     if (!escolhas.length) {
-      toast('Escolha o tipo de pelo menos uma despesa', 'erro');
+      toast('Escolha o tipo ou mude o nome de pelo menos uma despesa', 'erro');
       return;
     }
     e.target.disabled = true;
     e.target.textContent = 'Salvando…';
     try {
-      const r = await enviar('status', { alteracoes: escolhas.map(({ d, tipo }) => ({ aba: 'despesas', linha: d._linha, nome: d.nome, campos: { TIPO: tipo } })) });
+      const r = await enviar('status', { alteracoes: escolhas.map(({ d, campos }) => ({ aba: 'despesas', linha: d._linha, nome: d.nome, campos })) });
       if (r.erros?.length) toast(r.erros[0], 'erro', 6000);
-      if (r.alteradas) toast(`${r.alteradas} despesa(s) classificada(s)`);
+      if (r.alteradas) toast(`${r.alteradas} despesa(s) atualizada(s)`);
       classificandoSemTipo = false;
       await app.recarregar();
     } catch (err) {
@@ -342,11 +391,18 @@ function renderParcelamentos(el, dados, mes) {
   const p = parcelamentos(dados, mes);
   el.innerHTML = `<div class="card-titulo"><h2>Parcelamentos no cartão</h2><span class="sub">${p.ativos.length} ativo(s) · ainda faltam <b class="num">${moeda(p.totalRestante)}</b></span></div>
     <div id="g-parcelas"></div>
-    <details class="secao" style="margin-top:8px"><summary>Ver compras parceladas</summary>
-      <div class="tabela-wrap"><table class="tabela"><thead><tr><th>Compra</th><th>Parcela</th><th class="num">Valor</th><th class="num">Falta pagar</th><th>Termina</th></tr></thead><tbody>
-      ${p.ativos.map((a) => `<tr><td>${escapeHtml(a.nome)}<span class="desc-original">${escapeHtml(a.tipo)}</span></td><td class="num">${a.k}/${a.n}</td><td class="num">${moeda(a.valor)}</td><td class="num">${moeda(a.restante)}</td><td>${nomeMes(a.termina, false)}</td></tr>`).join('') || '<tr><td colspan="5" class="vazio">Nenhum parcelamento ativo.</td></tr>'}
-      </tbody></table></div>
+    <details class="secao" style="margin-top:8px" ${parcelasAbertas ? 'open' : ''}><summary>Ver compras parceladas</summary>
+      <div class="tabela-wrap" id="tabela-parcelas"></div>
     </details>`;
+  const desenharParcelas = () => {
+    const alvo = $('#tabela-parcelas', el);
+    alvo.innerHTML = `<table class="tabela">${cabecalho(COLS_PARCELAS, ordem.parcelas)}<tbody>
+      ${ordenar(p.ativos, ordem.parcelas, VALOR_PARCELA).map((a) => `<tr><td>${escapeHtml(a.nome)}<span class="desc-original">${escapeHtml(a.tipo)}</span></td><td class="tab">${a.k}/${a.n}</td><td class="num">${moeda(a.valor)}</td><td class="num">${moeda(a.restante)}</td><td>${nomeMes(a.termina, false)}</td></tr>`).join('') || '<tr><td colspan="5" class="vazio">Nenhum parcelamento ativo.</td></tr>'}
+      </tbody></table>`;
+    ligarOrdenacao(alvo, COLS_PARCELAS, ordem.parcelas, desenharParcelas);
+  };
+  desenharParcelas();
+  $('details', el).addEventListener('toggle', (e) => (parcelasAbertas = e.target.open));
   if (!p.proximos.some((x) => x.valor > 0)) {
     $('#g-parcelas', el).innerHTML = '<div class="vazio" style="padding:8px 0">Nenhuma parcela futura.</div>';
     return;
@@ -373,25 +429,46 @@ function renderMaiores(el, despesas) {
 function renderTabela(el, t) {
   const termo = rotulo(busca);
   const filtra = (campos) => !termo || rotulo(campos.join(' ')).includes(termo);
-  const ordenar = (a, b) => {
-    const da = parseData(a.vencimento) || { ano: 0, mes: 0, dia: 0 };
-    const db = parseData(b.vencimento) || { ano: 0, mes: 0, dia: 0 };
-    return db.ano - da.ano || db.mes - da.mes || db.dia - da.dia;
-  };
+  const redesenhar = () => renderTabela(el, t);
   if (abaTabela === 'despesas') {
-    const linhas = t.despesas.filter((d) => filtra([d.nome, d.tipo, d.forma, d.instituicao, d.descOriginal])).sort(ordenar);
+    const linhas = ordenar(t.despesas.filter((d) => filtra([d.nome, d.tipo, d.forma, d.instituicao, d.descOriginal])), ordem.despesas, VALOR_DESPESA);
     const editavel = backendConfigurado();
+    const colunas = editavel ? [...COLS_DESPESAS, { id: '', rotulo: '' }] : COLS_DESPESAS;
     el.innerHTML = linhas.length
-      ? `<table class="tabela"><thead><tr><th>Data</th><th>Descrição</th><th>Tipo</th><th class="opc">Forma</th><th class="opc">Parcela</th><th class="opc">Status</th><th class="num">Valor</th>${editavel ? '<th></th>' : ''}</tr></thead><tbody>
+      ? `<table class="tabela">${cabecalho(colunas, ordem.despesas)}<tbody>
         ${linhas.map((d) => (editavel && editando === d._linha ? linhaEmEdicao(d) : linhaDespesa(d, editavel))).join('')}</tbody></table>`
       : '<div class="vazio">Nenhuma despesa encontrada.</div>';
+    ligarOrdenacao(el, COLS_DESPESAS, ordem.despesas, redesenhar);
     ligarEdicao(el, t, linhas);
+    ligarStatus(el, t, linhas);
   } else {
-    const linhas = t.receitas.filter((r) => filtra([r.nome, r.tipo, r.instituicao]));
+    const linhas = ordenar(t.receitas.filter((r) => filtra([r.nome, r.tipo, r.instituicao])), ordem.receitas, VALOR_RECEITA);
     el.innerHTML = linhas.length
-      ? `<table class="tabela"><thead><tr><th>Quem</th><th>Descrição</th><th class="opc">Instituição</th><th class="opc">Forma</th><th class="num">Valor</th></tr></thead><tbody>
+      ? `<table class="tabela">${cabecalho(COLS_RECEITAS, ordem.receitas)}<tbody>
         ${linhas.map((r) => `<tr><td>${escapeHtml(r.nome)}</td><td>${escapeHtml(r.tipo)}</td><td class="text-2 opc">${escapeHtml(r.instituicao)}</td><td class="text-2 opc">${escapeHtml(r.forma)}</td><td class="num">${moeda(r.valor)}</td></tr>`).join('')}</tbody></table>`
       : '<div class="vazio">Nenhuma receita encontrada.</div>';
+    ligarOrdenacao(el, COLS_RECEITAS, ordem.receitas, redesenhar);
+  }
+}
+
+// Status: um clique alterna entre "Pago" e "A pagar" e grava na planilha
+function ligarStatus(el, t, linhas) {
+  for (const b of $$('[data-status-linha]', el)) {
+    b.addEventListener('click', async () => {
+      const d = linhas.find((x) => x._linha === +b.dataset.statusLinha);
+      const novo = rotulo(d.status) === 'PAGO' ? 'A PAGAR' : 'PAGO';
+      b.disabled = true;
+      try {
+        const r = await enviar('status', { alteracoes: [{ aba: 'despesas', linha: d._linha, nome: d.nome, campos: { STATUS: novo } }] });
+        if (r.erros?.length) throw new Error(r.erros[0]);
+        d.status = novo;
+        toast(`“${d.nome}” marcada como ${novo === 'PAGO' ? 'paga' : 'a pagar'}`);
+        ctxTabela.app.renderizar(); // atualiza também "Contas a pagar"
+      } catch (err) {
+        toast(err.message, 'erro', 6000);
+        b.disabled = false;
+      }
+    });
   }
 }
 
@@ -399,7 +476,7 @@ function linhaDespesa(d, editavel) {
   const desc = d.descOriginal && d.descOriginal !== d.nome ? `<span class="desc-original">${escapeHtml(d.descOriginal)}</span>` : '';
   return `<tr><td class="tab">${escapeHtml(d.vencimento)}</td><td>${escapeHtml(d.nome)}${rotulo(d.categoria) === 'FIXO' ? ' <span class="badge">fixo</span>' : ''}${desc}</td>
     <td>${escapeHtml(tipoDe(d))}</td><td class="text-2 opc">${escapeHtml(d.forma)}</td><td class="tab opc">${escapeHtml(d.parcelas && d.parcelas !== '1/1' ? d.parcelas : '')}</td>
-    <td class="opc">${statusBadge(d.status)}</td><td class="num">${moeda(d.valor)}</td>
+    <td class="opc">${editavel ? `<button class="status-btn" data-status-linha="${d._linha}" title="Clique para marcar como ${rotulo(d.status) === 'PAGO' ? 'a pagar' : 'pago'}">${statusBadge(d.status)}</button>` : statusBadge(d.status)}</td><td class="num">${moeda(d.valor)}</td>
     ${editavel ? `<td class="acao-linha"><button class="btn btn-ghost btn-icone btn-sm" data-editar="${d._linha}" aria-label="Editar ${escapeHtml(d.nome)}" title="Renomear / mudar tipo">✎</button></td>` : ''}</tr>`;
 }
 

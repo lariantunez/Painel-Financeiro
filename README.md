@@ -7,7 +7,7 @@ Publicado em: https://lariantunez.github.io/Painel-Financeiro/
 ## Rotina mensal
 
 1. **Importar** → arraste a fatura do cartão e o extrato da conta (CSV do Nubank, OFX de qualquer banco ou CSV genérico).
-2. **Contas fixas** → o painel lista as fixas do mês com vencimento e parcela já calculados; você só confirma se ainda existe, o valor e se já pagou. Salários entram no mesmo passo.
+2. **Contas do mês** → o painel lista as contas mensais com vencimento e parcela já calculados; você só confirma se ainda existe, o valor e se já pagou. Salários entram no mesmo passo.
 3. **Revisar** → só aparecem os lançamentos novos ou duvidosos. O que você decidir vale para todos os lançamentos iguais e fica memorizado para os próximos meses.
 4. **Enviar** → as linhas vão para a planilha. Cada importação pode ser desfeita.
 

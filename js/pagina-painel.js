@@ -65,9 +65,10 @@ function temFiltro(filtroTipo) {
   return Boolean(filtroTipo || busca.trim() || Object.keys(ORDEM_PADRAO).some((k) => ordem[k].col !== ORDEM_PADRAO[k].col || ordem[k].dir !== ORDEM_PADRAO[k].dir));
 }
 
+// Sempre visível; fica desativado quando não há nada para limpar
 function atualizarBotaoLimpar(filtroTipo) {
   const b = document.getElementById('limpar-filtros');
-  if (b) b.hidden = !temFiltro(filtroTipo);
+  if (b) b.disabled = !temFiltro(filtroTipo);
 }
 
 export function renderPainel(raiz, app) {
@@ -95,7 +96,7 @@ export function renderPainel(raiz, app) {
       </div>
       <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
         ${filtroTipo ? `<button class="filtro-chip" id="limpar-filtro">Tipo: ${escapeHtml(filtroTipo)} <span aria-hidden="true">×</span></button>` : ''}
-        <button class="btn btn-sm" id="limpar-filtros" ${temFiltro(filtroTipo) ? '' : 'hidden'}>✕ Limpar filtros</button>
+        <button class="btn btn-sm" id="limpar-filtros" ${temFiltro(filtroTipo) ? '' : 'disabled'} title="Limpa o filtro de tipo, a busca e a ordenação das tabelas">✕ Limpar filtros</button>
       </div>
     </div>
 

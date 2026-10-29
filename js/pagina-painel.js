@@ -61,14 +61,15 @@ const ORDEM_PADRAO = {
 const ordem = structuredClone(ORDEM_PADRAO);
 
 // Filtros: tipo (gráfico de categorias), busca da tabela e ordenação das colunas
-function temFiltro(filtroTipo) {
-  return Boolean(filtroTipo || busca.trim() || Object.keys(ORDEM_PADRAO).some((k) => ordem[k].col !== ORDEM_PADRAO[k].col || ordem[k].dir !== ORDEM_PADRAO[k].dir));
+// (o mês também conta: clicar numa barra do gráfico de 12 meses filtra a página inteira)
+function temFiltro({ filtroTipo, mes }) {
+  return Boolean(filtroTipo || mes !== mesAtual() || busca.trim() || Object.keys(ORDEM_PADRAO).some((k) => ordem[k].col !== ORDEM_PADRAO[k].col || ordem[k].dir !== ORDEM_PADRAO[k].dir));
 }
 
 // Sempre visível; fica desativado quando não há nada para limpar
-function atualizarBotaoLimpar(filtroTipo) {
+function atualizarBotaoLimpar(estado) {
   const b = document.getElementById('limpar-filtros');
-  if (b) b.disabled = !temFiltro(filtroTipo);
+  if (b && estado) b.disabled = !temFiltro(estado);
 }
 
 export function renderPainel(raiz, app) {
@@ -96,7 +97,7 @@ export function renderPainel(raiz, app) {
       </div>
       <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
         ${filtroTipo ? `<button class="filtro-chip" id="limpar-filtro">Tipo: ${escapeHtml(filtroTipo)} <span aria-hidden="true">×</span></button>` : ''}
-        <button class="btn btn-sm" id="limpar-filtros" ${temFiltro(filtroTipo) ? '' : 'disabled'} title="Limpa o filtro de tipo, a busca e a ordenação das tabelas">✕ Limpar filtros</button>
+        <button class="btn btn-sm" id="limpar-filtros" ${temFiltro(app.estado) ? '' : 'disabled'} title="Volta para o mês atual e limpa o tipo, a busca e a ordenação das tabelas">✕ Limpar filtros</button>
       </div>
     </div>
 
@@ -162,6 +163,7 @@ export function renderPainel(raiz, app) {
   $('#limpar-filtros', raiz).addEventListener('click', () => {
     busca = '';
     Object.assign(ordem, structuredClone(ORDEM_PADRAO));
+    app.estado.mes = mesAtual();
     app.filtrarTipo(null); // redesenha a página inteira
   });
 
@@ -422,7 +424,7 @@ function renderParcelamentos(el, dados, mes) {
       ${ordenar(p.ativos, ordem.parcelas, VALOR_PARCELA).map((a) => `<tr><td>${escapeHtml(a.nome)}<span class="desc-original">${escapeHtml(a.tipo)}</span></td><td class="tab">${a.k}/${a.n}</td><td class="num">${moeda(a.valor)}</td><td class="num">${moeda(a.restante)}</td><td>${nomeMes(a.termina, false)}</td></tr>`).join('') || '<tr><td colspan="5" class="vazio">Nenhum parcelamento ativo.</td></tr>'}
       </tbody></table>`;
     ligarOrdenacao(alvo, COLS_PARCELAS, ordem.parcelas, desenharParcelas);
-    atualizarBotaoLimpar(ctxTabela?.app.estado.filtroTipo);
+    atualizarBotaoLimpar(ctxTabela?.app.estado);
   };
   desenharParcelas();
   $('details', el).addEventListener('toggle', (e) => (parcelasAbertas = e.target.open));
@@ -472,7 +474,7 @@ function renderTabela(el, t) {
       : '<div class="vazio">Nenhuma receita encontrada.</div>';
     ligarOrdenacao(el, COLS_RECEITAS, ordem.receitas, redesenhar);
   }
-  atualizarBotaoLimpar(ctxTabela?.app.estado.filtroTipo);
+  atualizarBotaoLimpar(ctxTabela?.app.estado);
 }
 
 // Listas de seleção na tabela (status e categoria): gravam na planilha ao escolher

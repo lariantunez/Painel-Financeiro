@@ -136,19 +136,40 @@ function mesclarRegras(base, novas) {
 }
 
 // Link que leva a configuração para outro aparelho (ex.: celular)
+// Link curto e só com caracteres seguros (letras, números, - e _), que apps de mensagem não quebram:
+// #c=<id da implantação do backend>.<token>
+const RX_URL_BACKEND = /^https:\/\/script\.google\.com\/macros\/s\/([\w-]+)\/exec$/;
+
 export function linkDeConfiguracao() {
-  const dados = btoa(unescape(encodeURIComponent(JSON.stringify({ url: config.url, token: config.token, titulares: config.titulares, instituicaoCartao: config.instituicaoCartao }))));
-  return `${location.origin}${location.pathname}#config=${dados}`;
+  const id = (config.url.match(RX_URL_BACKEND) || [])[1];
+  if (!id || !/^[\w-]+$/.test(config.token)) throw new Error('Conexão não configurada neste navegador.');
+  return `${location.origin}${location.pathname}#c=${id}.${config.token}`;
 }
 
+// Retorna 'ok' (configurou), 'erro' (link veio quebrado) ou null (não é link de configuração)
 export function importarConfiguracaoDoLink() {
-  const m = location.hash.match(/#config=([^&]+)/);
-  if (!m) return false;
-  try {
-    salvarConfig(JSON.parse(decodeURIComponent(escape(atob(m[1])))));
-    history.replaceState(null, '', location.pathname + '#/painel');
-    return true;
-  } catch {
-    return false;
+  const hash = location.hash;
+  const limpar = () => history.replaceState(null, '', location.pathname + '#/painel');
+  const curto = hash.match(/^#c=([\w-]+)\.([\w-]+)$/);
+  if (curto) {
+    salvarConfig({ url: `https://script.google.com/macros/s/${curto[1]}/exec`, token: curto[2] });
+    limpar();
+    return 'ok';
   }
+  const antigo = hash.match(/#config=([^&]+)/); // formato anterior (base64)
+  if (antigo) {
+    try {
+      salvarConfig(JSON.parse(decodeURIComponent(escape(atob(decodeURIComponent(antigo[1]))))));
+      limpar();
+      return 'ok';
+    } catch {
+      limpar();
+      return 'erro';
+    }
+  }
+  if (/^#c=/.test(hash)) {
+    limpar();
+    return 'erro';
+  }
+  return null;
 }

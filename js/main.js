@@ -124,7 +124,9 @@ function aplicarTema() {
 
 // ───────────── Início ─────────────
 
-if (importarConfiguracaoDoLink()) toast('Configuração importada do link');
+const link = importarConfiguracaoDoLink();
+if (link === 'ok') toast('Configuração importada do link · este aparelho está conectado');
+if (link === 'erro') toast('O link de configuração chegou incompleto. No computador, use Configurações → "Copiar link para o celular" e envie de novo.', 'erro', 12000);
 aplicarTema();
 estado.dados = dadosEmCache();
 renderizar();

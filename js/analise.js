@@ -64,6 +64,49 @@ export function lancamentosSeguintes(despesas, d) {
 
 export const RECORRENCIAS = ['MENSAL', 'EVENTUAL'];
 
+// ───────────── Análises do painel ─────────────
+
+export const mesesDoAno = (ano) => Array.from({ length: 12 }, (_, i) => `${ano}-${String(i + 1).padStart(2, '0')}`);
+
+// Soma por chave (ex.: por tipo, por despesa)
+export function somarPor(lista, chave) {
+  const m = new Map();
+  for (const d of lista) m.set(chave(d), (m.get(chave(d)) || 0) + (d.valor || 0));
+  return m;
+}
+
+// Receitas de salário × outras receitas, mês a mês no ano
+const ehSalario = (r) => /SALARIO|FERIAS|PLR|RESCISAO|DECIMO TERCEIRO|13O SALARIO/.test(rotulo(`${r.tipo}`));
+export function receitasDoAno(dados, ano) {
+  return mesesDoAno(ano).map((mes) => {
+    const doMes = dados.receitas.filter((r) => r.mesRef === mes);
+    const salario = doMes.filter(ehSalario).reduce((s, r) => s + r.valor, 0);
+    return { mes, salario, outras: doMes.reduce((s, r) => s + r.valor, 0) - salario };
+  });
+}
+
+// Cor de cada tipo pela posição no ano (fixa entre rosca, anéis e detalhamento; "Outros" depois dos 6 maiores)
+export const OUTROS = 'Outros';
+export function coresDosTipos(despesasDoAno, maximo = 6) {
+  const ranking = [...somarPor(despesasDoAno, tipoDe).entries()].filter(([, v]) => v > 0).sort((a, b) => b[1] - a[1]);
+  const cores = new Map(ranking.slice(0, maximo).map(([t], i) => [t, `var(--cat-${i + 1})`]));
+  return { cores, principais: ranking.slice(0, maximo).map(([t]) => t), corOutros: `var(--cat-${Math.min(maximo + 1, 8)})` };
+}
+
+// Segmentos de rosca por tipo: os principais do ano + "Outros"
+export function segmentosPorTipo(despesas, { cores, corOutros }) {
+  const somas = somarPor(despesas, tipoDe);
+  const seg = [];
+  let outros = 0;
+  for (const [tipo, valor] of [...somas.entries()].sort((a, b) => b[1] - a[1])) {
+    if (valor <= 0) continue;
+    if (cores.has(tipo)) seg.push({ tipo, valor, cor: cores.get(tipo) });
+    else outros += valor;
+  }
+  if (outros > 0) seg.push({ tipo: OUTROS, valor: outros, cor: corOutros });
+  return seg;
+}
+
 // ───────────── Previsão dos próximos meses ─────────────
 
 const ehParcelaCartao = (d) => {

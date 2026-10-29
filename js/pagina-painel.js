@@ -1,7 +1,8 @@
 // Tela principal: visão do mês.
 
 import { moeda, pct, nomeMes, somarMeses, MESES, MESES_LONGOS, escapeHtml, rotulo, mesAtual, RX_PARCELA, parseValor, arred, rotuloPeriodo } from './util.js';
-import { totaisMes, serieMeses, porTipo, fixoVariavel, contasAPagar, parcelamentos, maioresGastos, qualidade, tipoDe, mesmaDespesa, lancamentosSeguintes, nomeDaParcela, periodoAnterior, FILTROS, filtrarDespesas } from './analise.js';
+import { totaisMes, serieMeses, porTipo, fixoVariavel, contasAPagar, parcelamentos, maioresGastos, qualidade, tipoDe, mesmaDespesa, lancamentosSeguintes, nomeDaParcela, periodoAnterior, FILTROS, filtrarDespesas, mesesDoAno, somarPor, receitasDoAno, coresDosTipos, segmentosPorTipo, OUTROS } from './analise.js';
+import { sparkline, linhasSuaves, rosca, aneis } from './graficos.js';
 import { serieDe } from './fixas.js';
 import { graficoColunas, responsivo, legenda, linhaTooltip, mostrarTooltip, esconderTooltip, toast, $, $$, cabecalho, ordenar, ligarOrdenacao, dataOrdenavel } from './ui.js';
 import { backendConfigurado, enviar } from './api.js';
@@ -16,6 +17,7 @@ let parcelasAbertas = false;
 let editando = null; // linha da planilha em edição na tabela
 let ctxTabela = null;
 let busca = '';
+let tipoDetalhe = null; // tipo escolhido no quadro "Detalhamento de despesas"
 
 // Colunas ordenáveis (clique no título); a ordem escolhida fica guardada enquanto a página está aberta
 const COLS_DESPESAS = [
@@ -24,8 +26,8 @@ const COLS_DESPESAS = [
   { id: 'tipo', rotulo: 'Tipo' },
   { id: 'categoria', rotulo: 'Categoria', classe: 'opc' },
   { id: 'recorrencia', rotulo: 'Recorrência', classe: 'opc' },
-  { id: 'forma', rotulo: 'Forma', classe: 'opc' },
-  { id: 'parcela', rotulo: 'Parcela', classe: 'opc' },
+  { id: 'forma', rotulo: 'Forma', classe: 'opc opc-lg' },
+  { id: 'parcela', rotulo: 'Parcela', classe: 'opc opc-lg' },
   { id: 'status', rotulo: 'Status', classe: 'opc' },
   { id: 'valor', rotulo: 'Valor', classe: 'num', desc: true },
 ];
@@ -81,92 +83,47 @@ function temFiltro({ filtros, meses }) {
   return Boolean(Object.keys(filtros).length || meses.length !== 1 || meses[0] !== mesAtual() || busca.trim() || Object.keys(ORDEM_PADRAO).some((k) => ordem[k].col !== ORDEM_PADRAO[k].col || ordem[k].dir !== ORDEM_PADRAO[k].dir));
 }
 
-// ───────────── Seletor de período (vários meses) ─────────────
+// ───────────── Anos e meses na barra lateral ─────────────
+// Clique: escolhe o mês (de novo: volta ao mês atual) · Ctrl+clique: soma/tira meses · ano: mesmos meses no outro ano
 
-const ATALHOS = [
-  ['atual', 'Mês atual'],
-  ['3', 'Últimos 3 meses'],
-  ['6', 'Últimos 6 meses'],
-  ['12', 'Últimos 12 meses'],
-  ['ano', 'Este ano'],
-];
-
-function mesesDoAtalho(atalho) {
-  const hoje = mesAtual();
-  if (atalho === 'atual') return [hoje];
-  if (atalho === 'ano') return Array.from({ length: +hoje.slice(5) }, (_, i) => `${hoje.slice(0, 4)}-${String(i + 1).padStart(2, '0')}`);
-  return Array.from({ length: +atalho }, (_, i) => somarMeses(hoje, -i));
-}
-
-function seletorPeriodo(meses, dados) {
-  // meses disponíveis: do primeiro lançamento até 2 meses à frente (contas já lançadas)
-  const comDados = new Set([...dados.despesas, ...dados.receitas].map((l) => l.mesRef).filter((m) => m && m >= '2000'));
+function renderLateral(app, dados) {
+  const el = document.getElementById('lateral-periodo');
+  if (!el) return;
+  const { meses } = app.estado;
   const fim = somarMeses(mesAtual(), 2);
-  const inicio = [...comDados].filter((m) => m <= fim).sort()[0] || mesAtual();
-  const anos = [];
-  for (let a = +fim.slice(0, 4); a >= +inicio.slice(0, 4); a--) anos.push(a);
-  const sel = new Set(meses);
-  return `<div class="periodo">
-    <button class="btn btn-ghost btn-icone" data-mover="-1" aria-label="Período anterior">‹</button>
-    <button class="periodo-btn" id="periodo-btn" aria-haspopup="true" aria-expanded="false"><h1>${escapeHtml(rotuloPeriodo(meses))}</h1><span class="seta" aria-hidden="true">▾</span></button>
-    <button class="btn btn-ghost btn-icone" data-mover="1" aria-label="Próximo período">›</button>
-    <div class="periodo-painel" id="periodo-painel" hidden>
-      <div class="periodo-atalhos">${ATALHOS.map(([v, r]) => `<button class="btn btn-sm" data-atalho="${v}">${r}</button>`).join('')}</div>
-      <div class="periodo-anos">
-        ${anos
-          .map((a) => {
-            const doAno = Array.from({ length: 12 }, (_, i) => `${a}-${String(i + 1).padStart(2, '0')}`).filter((m) => m >= inicio && m <= fim);
-            return `<div class="periodo-ano">
-              <label class="periodo-ano-rotulo"><input type="checkbox" data-ano="${a}" ${doAno.every((m) => sel.has(m)) ? 'checked' : ''}> ${a}</label>
-              <div class="periodo-meses">${Array.from({ length: 12 }, (_, i) => {
-                const m = `${a}-${String(i + 1).padStart(2, '0')}`;
-                const fora = m < inicio || m > fim;
-                return `<label class="mes-chip ${comDados.has(m) ? '' : 'sem-dados'}" title="${MESES_LONGOS[i]} ${a}${comDados.has(m) ? '' : ' (sem lançamentos)'}"><input type="checkbox" data-m="${m}" ${sel.has(m) ? 'checked' : ''} ${fora ? 'disabled' : ''}><span>${MESES[i]}</span></label>`;
-              }).join('')}</div>
-            </div>`;
-          })
-          .join('')}
-      </div>
-      <div class="periodo-rodape"><span class="muted small" id="periodo-contagem">${meses.length} mês(es)</span><span style="display:flex;gap:8px"><button class="btn btn-sm btn-ghost" id="periodo-cancelar">Cancelar</button><button class="btn btn-sm btn-primario" id="periodo-aplicar">Aplicar</button></span></div>
-    </div>
-  </div>`;
-}
-
-function ligarSeletorPeriodo(raiz, app) {
-  const painel = $('#periodo-painel', raiz);
-  const botao = $('#periodo-btn', raiz);
-  const abrir = (sim) => {
-    painel.hidden = !sim;
-    botao.setAttribute('aria-expanded', String(sim));
-  };
-  const marcados = () => $$('[data-m]:checked', painel).map((c) => c.dataset.m);
-  const contar = () => {
-    $('#periodo-contagem', painel).textContent = `${marcados().length} mês(es)`;
-    for (const c of $$('[data-ano]', painel)) {
-      const doAno = $$(`[data-m^="${c.dataset.ano}-"]:not(:disabled)`, painel);
-      c.checked = doAno.length > 0 && doAno.every((x) => x.checked);
-    }
-  };
-  botao.addEventListener('click', () => abrir(painel.hidden));
-  $('#periodo-cancelar', painel).addEventListener('click', () => abrir(false));
-  $('#periodo-aplicar', painel).addEventListener('click', () => app.definirMeses(marcados()));
-  painel.addEventListener('change', (e) => {
-    if (e.target.dataset.ano) for (const c of $$(`[data-m^="${e.target.dataset.ano}-"]:not(:disabled)`, painel)) c.checked = e.target.checked;
-    contar();
-  });
-  for (const b of $$('[data-atalho]', painel)) b.addEventListener('click', () => app.definirMeses(mesesDoAtalho(b.dataset.atalho)));
-  for (const b of $$('[data-mover]', raiz)) b.addEventListener('click', () => app.definirMeses(app.estado.meses.map((m) => somarMeses(m, +b.dataset.mover * app.estado.meses.length))));
-  painel.addEventListener('keydown', (e) => e.key === 'Escape' && (abrir(false), botao.focus()));
-}
-
-// Fecha o seletor de período ao clicar fora (um único ouvinte para a página toda)
-document.addEventListener('mousedown', (e) => {
-  const painel = document.getElementById('periodo-painel');
-  if (painel && !painel.hidden && !e.target.closest('.periodo')) {
-    painel.hidden = true;
-    document.getElementById('periodo-btn')?.setAttribute('aria-expanded', 'false');
+  const comDados = new Set([...dados.despesas, ...dados.receitas].map((l) => l.mesRef).filter((m) => m && m >= '2000' && m <= fim));
+  const anos = [...new Set([...comDados].map((m) => m.slice(0, 4)))].sort();
+  const ano = meses[meses.length - 1].slice(0, 4);
+  if (!anos.includes(ano)) anos.push(ano);
+  const doAno = mesesDoAno(ano).filter((m) => m <= fim);
+  const anoInteiro = doAno.length > 1 && doAno.every((m) => meses.includes(m));
+  el.innerHTML = `
+    <div class="lat-bloco"><div class="lat-titulo">Ano</div><div class="lat-lista">${anos
+      .map((a) => `<button class="lat-item ${a === ano ? 'ativo' : ''}" data-ano="${a}">${a}</button>`)
+      .join('')}</div></div>
+    <div class="lat-bloco"><div class="lat-titulo">Mês</div><div class="lat-lista">${mesesDoAno(ano)
+      .map((m, i) => `<button class="lat-item ${meses.includes(m) ? 'ativo' : ''} ${comDados.has(m) ? '' : 'sem-dados'}" data-mes-lat="${m}" ${m > fim ? 'disabled' : ''}>${MESES_LONGOS[i]}</button>`)
+      .join('')}</div>
+      <div class="lat-acoes"><button data-atalho="ano" class="${anoInteiro ? 'ativo' : ''}">Ano inteiro</button><button data-atalho="12">Últimos 12 meses</button></div>
+      <div class="lat-dica">Ctrl+clique soma meses</div></div>`;
+  for (const b of el.querySelectorAll('[data-mes-lat]')) b.addEventListener('click', (e) => clicarMes(app, b.dataset.mesLat, e));
+  for (const b of el.querySelectorAll('[data-ano]')) {
+    b.addEventListener('click', () => {
+      const novos = meses.map((m) => `${b.dataset.ano}-${m.slice(5)}`).filter((m) => m <= fim);
+      app.definirMeses(novos.length ? novos : mesesDoAno(b.dataset.ano).filter((m) => m <= fim));
+    });
   }
-});
+  el.querySelector('[data-atalho="ano"]').addEventListener('click', () => app.definirMeses(anoInteiro ? [mesAtual()] : doAno));
+  el.querySelector('[data-atalho="12"]').addEventListener('click', () => app.definirMeses(Array.from({ length: 12 }, (_, i) => somarMeses(mesAtual(), -i))));
+}
+
+// Clicar num mês (lateral ou gráficos): escolhe; de novo no mesmo: volta ao mês atual; Ctrl: soma/tira
+function clicarMes(app, m, e) {
+  const { meses } = app.estado;
+  if (e && (e.ctrlKey || e.metaKey)) app.definirMeses(meses.includes(m) ? meses.filter((x) => x !== m) : [...meses, m]);
+  else if (meses.length === 1 && meses[0] === m) app.irParaMes(mesAtual());
+  else app.irParaMes(m);
+}
 
 // Sempre visível; fica desativado quando não há nada para limpar
 function atualizarBotaoLimpar(estado) {
@@ -182,9 +139,11 @@ export function renderPainel(raiz, app) {
     raiz.innerHTML = '<div class="vazio">Carregando dados…</div>';
     return;
   }
+  renderLateral(app, dados);
 
   // Período: um ou vários meses. "mes" = último mês do período (referência para contas a pagar e parcelas)
   const mes = meses[meses.length - 1];
+  const ano = mes.slice(0, 4);
   const varios = meses.length > 1;
   comparacao = varios ? 'vs período anterior' : 'vs mês anterior';
   periodo = varios ? 'período' : 'mês';
@@ -196,12 +155,23 @@ export function renderPainel(raiz, app) {
   const problemas = qualidade(dados);
   const aPagar = filtrarDespesas(contasAPagar(dados, mes), filtros, ['status']);
 
+  // Janela fixa dos gráficos de evolução: 12 meses até o mês atual (só se move se o período sair dela)
+  let fimGrafico = mesAtual();
+  if (meses.some((m) => m > fimGrafico || m < somarMeses(fimGrafico, -11))) fimGrafico = mes;
+  const serie = serieMeses(dados, fimGrafico, 12, filtros);
+  const serieGeral = filtrado ? serieMeses(dados, fimGrafico, 12) : serie;
+
+  // Tipos: cores fixas pela posição no ano; rosca/anéis ignoram o filtro de tipo (o tipo escolhido fica destacado)
+  const despesasAno = filtrarDespesas(totaisMes(dados, mesesDoAno(ano)).despesas, filtros, ['tipo']);
+  const despesasPeriodo = filtrarDespesas(totaisMes(dados, meses).despesas, filtros, ['tipo']);
+  const paleta = coresDosTipos(despesasAno);
+
   const semTipo = problemas.find((p) => p.semTipo)?.semTipo || [];
   raiz.innerHTML = `
     ${avisos(app, problemas)}
     ${classificandoSemTipo && semTipo.length ? painelSemTipo(semTipo, dados) : ''}
     <div class="cabecalho-pagina">
-      ${seletorPeriodo(meses, dados)}
+      <div><h1 class="titulo-periodo">${escapeHtml(rotuloPeriodo(meses))}</h1><div class="sub-periodo">${varios ? `${meses.length} meses selecionados` : 'Visão do mês'}${filtrado ? ' · com filtros' : ''}</div></div>
       <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
         ${Object.entries(filtros)
           .map(([k, f]) => `<button class="filtro-chip" data-tirar="${k}" title="Tirar este filtro">${FILTROS[k].rotulo}: ${escapeHtml(f.texto)} <span aria-hidden="true">×</span></button>`)
@@ -211,30 +181,41 @@ export function renderPainel(raiz, app) {
     </div>
 
     <section class="kpis">
-      ${kpi('Receitas', COR_R, t.receita, ant.receita, `${t.qtdReceitas} lançamento(s)`, true)}
-      ${kpi('Despesas', COR_D, t.despesa, ant.despesa, `${t.qtdDespesas} lançamento(s)`, false)}
+      ${kpi('Receitas', COR_R, t.receita, ant.receita, `${t.qtdReceitas} lançamento(s)`, true, 'sp-receitas')}
+      ${kpi('Despesas', COR_D, t.despesa, ant.despesa, `${t.qtdDespesas} lançamento(s)`, false, 'sp-despesas')}
       ${kpiSaldo(geral, filtrado)}
       ${kpiPoupanca(geral, geralAnt, filtrado)}
     </section>
 
     <section class="grade">
-      <div class="card c-12">
-        <div class="card-titulo">
-          <h2>Últimos 12 meses</h2>
-          ${legenda([[COR_R, 'Receitas'], [COR_D, filtrado ? 'Despesas (filtradas)' : 'Despesas']])}
-        </div>
+      <div class="card c-7">
+        <div class="card-titulo"><h2>Receitas e despesas</h2>${legenda([[COR_R, 'Receitas'], [COR_D, filtrado ? 'Despesas (filtradas)' : 'Despesas']])}</div>
         <div id="g-evolucao"></div>
+      </div>
+      <div class="card c-5">
+        <div class="card-titulo"><h2>Despesas ${varios ? 'no período' : 'no mês'}</h2><span class="sub">por tipo · clique para filtrar</span></div>
+        <div id="rosca-periodo"></div>
       </div>
     </section>
 
     <section class="grade">
       <div class="card c-7">
-        <div class="card-titulo">
-          <h2>Despesas por tipo</h2>
-          ${legenda([[COR_D, varios ? 'No período' : 'Este mês'], ['var(--media-fundo)', varios ? 'Média de 6 meses (mesma duração)' : 'Média 6 meses']])}
-        </div>
-        <div id="por-tipo"></div>
+        <div class="card-titulo"><h2>Análise mensal das receitas · ${ano}</h2>${legenda([[COR_R, 'Salário'], ['var(--serie-3)', 'Outras receitas']])}</div>
+        <div id="g-receitas"></div>
       </div>
+      <div class="card c-5">
+        <div class="card-titulo"><h2>Despesas no ano · ${ano}</h2><span class="sub">por tipo</span></div>
+        <div id="rosca-ano"></div>
+      </div>
+    </section>
+
+    <section class="card" style="margin-bottom:12px">
+      <div class="card-titulo"><h2>Participação no ano</h2><span class="sub">quanto do gasto anual de cada tipo caiu ${varios ? 'neste período' : 'neste mês'}</span></div>
+      <div id="participacao"></div>
+    </section>
+
+    <section class="grade">
+      <div class="card c-7" id="detalhamento"></div>
       <div class="c-5" style="display:grid;gap:12px;align-content:start">
         <div class="card">
           <div class="card-titulo"><h2 class="filtravel ${ativoNoFiltro('status', 'A PAGAR') ? 'filtro-ativo' : ''}" ${filtravel('status', 'A PAGAR', 'A pagar')}>Contas a pagar</h2><span class="sub">${aPagar.length ? moeda(aPagar.reduce((s, d) => s + d.valor, 0)) : ''}</span></div>
@@ -245,12 +226,20 @@ export function renderPainel(raiz, app) {
     </section>
 
     <section class="grade">
-      <div class="card c-7" id="parcelamentos"></div>
+      <div class="card c-7">
+        <div class="card-titulo">
+          <h2>Despesas por tipo × média</h2>
+          ${legenda([[COR_D, varios ? 'No período' : 'Este mês'], ['var(--media-fundo)', varios ? 'Média de 6 meses (mesma duração)' : 'Média 6 meses']])}
+        </div>
+        <div id="por-tipo"></div>
+      </div>
       <div class="card c-5">
         <div class="card-titulo"><h2>Maiores gastos ${varios ? 'do período' : 'do mês'}</h2></div>
         <div id="maiores"></div>
       </div>
     </section>
+
+    <section class="grade"><div class="card c-12" id="parcelamentos"></div></section>
 
     <section class="card">
       <div class="abas" role="tablist">
@@ -263,8 +252,6 @@ export function renderPainel(raiz, app) {
   `;
 
   ligarSemTipo(raiz, semTipo, app);
-
-  ligarSeletorPeriodo(raiz, app);
   for (const b of $$('[data-tirar]', raiz)) b.addEventListener('click', () => app.tirarFiltro(b.dataset.tirar));
   // Um único ouvinte: qualquer dado com data-filtro filtra a página (e desfaz ao clicar de novo)
   if (!raiz._filtrosLigados) {
@@ -279,37 +266,88 @@ export function renderPainel(raiz, app) {
   }
   $('#limpar-filtros', raiz).addEventListener('click', () => {
     busca = '';
+    tipoDetalhe = null;
     Object.assign(ordem, structuredClone(ORDEM_PADRAO));
     app.limparFiltros(); // redesenha a página inteira
   });
 
-  // Evolução
-  // Janela fixa: últimos 12 meses até o mês atual (clicar numa barra só a seleciona, nada muda de lugar).
-  // Só se move quando o período escolhido tem mês fora dessa janela.
-  let fimGrafico = mesAtual();
-  if (meses.some((m) => m > fimGrafico || m < somarMeses(fimGrafico, -11))) fimGrafico = mes;
-  const serie = serieMeses(dados, fimGrafico, 12, filtros);
+  // Minigráficos dos cartões (mesma janela de 12 meses)
+  const sp = (id, valores, cor) => {
+    const el = $(`#${id}`, raiz);
+    if (el) responsivo(el, () => sparkline(el, valores, cor));
+  };
+  sp('sp-receitas', serie.map((s) => s.receita), COR_R);
+  sp('sp-despesas', serie.map((s) => s.despesa), COR_D);
+  sp('sp-saldo', serieGeral.map((s) => s.saldo), 'var(--accent)');
+  sp('sp-poupanca', serieGeral.map((s) => (s.receita > 0 ? s.saldo / s.receita : 0)), 'var(--serie-3)');
+
+  // Receitas e despesas: linhas suaves, janela fixa; clicar num mês seleciona
+  const rotulo12 = (m) => MESES[+m.slice(5) - 1] + (m.endsWith('-01') ? ` ${m.slice(2, 4)}` : '');
   responsivo($('#g-evolucao', raiz), () =>
-    graficoColunas($('#g-evolucao', raiz), {
-      rotulos: serie.map((s) => MESES[+s.mes.slice(5) - 1] + (s.mes.endsWith('-01') ? ` ${s.mes.slice(2, 4)}` : '')),
+    linhasSuaves($('#g-evolucao', raiz), {
+      rotulos: serie.map((s) => rotulo12(s.mes)),
       series: [
         { nome: 'Receitas', cor: COR_R, valores: serie.map((s) => s.receita) },
         { nome: 'Despesas', cor: COR_D, valores: serie.map((s) => s.despesa) },
       ],
-      selecionado: serie.map((s, i) => (meses.includes(s.mes) ? i : -1)).filter((i) => i >= 0),
-      onClick: (i, e) => {
-        const m = serie[i].mes;
-        if (e.ctrlKey || e.metaKey) app.definirMeses(meses.includes(m) ? meses.filter((x) => x !== m) : [...meses, m]);
-        else if (meses.length === 1 && meses[0] === m) app.irParaMes(mesAtual()); // clicar de novo tira o filtro
-        else app.irParaMes(m);
-      },
+      selecionados: serie.map((s, i) => (meses.includes(s.mes) ? i : -1)).filter((i) => i >= 0),
+      onClick: (i, e) => clicarMes(app, serie[i].mes, e),
       tooltip: (i) => {
         const s = serie[i];
-        return `<div class="t-titulo">${nomeMes(s.mes)}</div>${linhaTooltip(COR_R, 'Receitas', moeda(s.receita))}${linhaTooltip(COR_D, 'Despesas', moeda(s.despesa))}<div class="t-sep"></div>${linhaTooltip('', 'Saldo', `<span class="${s.saldo >= 0 ? 'pos' : 'neg'}">${s.saldo >= 0 ? '+' : ''}${moeda(s.saldo)}</span>`)}<div class="t-sep"></div><div class="small muted">Clique: ver este mês (de novo: volta ao atual) · Ctrl+clique: somar ao período</div>`;
+        return `<div class="t-titulo">${nomeMes(s.mes)}</div>${linhaTooltip(COR_R, 'Receitas', moeda(s.receita))}${linhaTooltip(COR_D, 'Despesas', moeda(s.despesa))}<div class="t-sep"></div>${linhaTooltip('', 'Saldo', `<span class="${s.saldo >= 0 ? 'pos' : 'neg'}">${s.saldo >= 0 ? '+' : ''}${moeda(s.saldo)}</span>`)}<div class="t-sep"></div><div class="small muted">Clique: ver este mês (de novo: volta ao atual) · Ctrl+clique: somar</div>`;
       },
     })
   );
 
+  // Roscas por tipo (período e ano) e anéis de participação
+  const totalAno = despesasAno.reduce((s, d) => s + d.valor, 0);
+  const totalPeriodo = despesasPeriodo.reduce((s, d) => s + d.valor, 0);
+  const segs = (lista) =>
+    segmentosPorTipo(lista, paleta).map((x) => ({
+      rotulo: x.tipo,
+      valor: x.valor,
+      cor: apagadoNoFiltro('tipo', x.tipo) ? `color-mix(in srgb, ${x.cor} 30%, var(--surface))` : x.cor,
+      atributos: x.tipo === OUTROS ? '' : filtravel('tipo', x.tipo),
+    }));
+  const dicaRosca = (lista) => (i, total) => {
+    const s = lista[i];
+    return `<div class="t-titulo">${escapeHtml(s.rotulo)}</div>${linhaTooltip(s.cor, 'Valor', moeda(s.valor))}${linhaTooltip('', 'Participação', pct(s.valor / total, 1))}${s.atributos ? '<div class="t-sep"></div><div class="small muted">Clique para filtrar</div>' : ''}`;
+  };
+  const segPeriodo = segs(despesasPeriodo);
+  const segAno = segs(despesasAno);
+  rosca($('#rosca-periodo', raiz), { segmentos: segPeriodo, centro: moedaCurta(totalPeriodo), sub: totalAno ? `${pct(totalPeriodo / totalAno, 1)} do ano` : '', tooltip: dicaRosca(segPeriodo) });
+  rosca($('#rosca-ano', raiz), { segmentos: segAno, centro: moedaCurta(totalAno), sub: `${new Set(despesasAno.map((d) => d.mesRef)).size} mês(es) com gastos`, tooltip: dicaRosca(segAno) });
+  const somaPeriodoTipo = somarPor(despesasPeriodo, tipoDe);
+  const somaAnoTipo = somarPor(despesasAno, tipoDe);
+  $('#participacao', raiz).innerHTML = paleta.principais.length
+    ? aneis(
+        paleta.principais.map((tipo) => ({
+          rotulo: tipo,
+          pct: (somaPeriodoTipo.get(tipo) || 0) / (somaAnoTipo.get(tipo) || 1),
+          cor: paleta.cores.get(tipo),
+          titulo: `${tipo}: ${moeda(somaPeriodoTipo.get(tipo) || 0)} de ${moeda(somaAnoTipo.get(tipo) || 0)} no ano · clique para filtrar`,
+          atributos: filtravel('tipo', tipo),
+          classe: `${ativoNoFiltro('tipo', tipo) ? 'filtro-ativo' : ''} ${apagadoNoFiltro('tipo', tipo) ? 'apagada' : ''}`,
+        }))
+      )
+    : '<div class="vazio">Sem despesas no ano.</div>';
+
+  // Receitas do ano: salário × outras
+  const rec = receitasDoAno(dados, ano);
+  responsivo($('#g-receitas', raiz), () =>
+    graficoColunas($('#g-receitas', raiz), {
+      rotulos: rec.map((r) => MESES[+r.mes.slice(5) - 1]),
+      series: [
+        { nome: 'Salário', cor: COR_R, valores: rec.map((r) => r.salario) },
+        { nome: 'Outras receitas', cor: 'var(--serie-3)', valores: rec.map((r) => r.outras) },
+      ],
+      selecionado: rec.map((r, i) => (meses.includes(r.mes) ? i : -1)).filter((i) => i >= 0),
+      onClick: (i, e) => clicarMes(app, rec[i].mes, e),
+      tooltip: (i) => `<div class="t-titulo">${nomeMes(rec[i].mes)}</div>${linhaTooltip(COR_R, 'Salário', moeda(rec[i].salario))}${linhaTooltip('var(--serie-3)', 'Outras receitas', moeda(rec[i].outras))}<div class="t-sep"></div>${linhaTooltip('', 'Total', moeda(rec[i].salario + rec[i].outras))}`,
+    })
+  );
+
+  renderDetalhamento($('#detalhamento', raiz), filtrarDespesas(totaisMes(dados, meses).despesas, filtros, ['tipo', 'despesa']), paleta, app);
   renderPorTipo($('#por-tipo', raiz), dados, meses, filtros);
   renderAPagar($('#a-pagar', raiz), aPagar, mes, app);
   renderComposicao($('#composicao', raiz), filtrarDespesas(totaisMes(dados, meses).despesas, filtros, ['categoria', 'recorrencia']));
@@ -329,6 +367,57 @@ export function renderPainel(raiz, app) {
     busca = e.target.value;
     renderTabela($('#tabela', raiz), t);
   });
+}
+
+// "R$ 13,9 mil" no centro das roscas
+function moedaCurta(v) {
+  const a = Math.abs(v);
+  if (a >= 1e6) return `R$ ${(v / 1e6).toLocaleString('pt-BR', { maximumFractionDigits: 1 })} mi`;
+  if (a >= 1e4) return `R$ ${(v / 1e3).toLocaleString('pt-BR', { maximumFractionDigits: 1 })} mil`;
+  return moeda(v);
+}
+
+// Detalhamento: maiores despesas de um tipo (lista de tipos ao lado para trocar)
+function renderDetalhamento(el, despesas, paleta, app) {
+  const porTipo = [...somarPor(despesas, tipoDe).entries()].filter(([, v]) => v > 0).sort((a, b) => b[1] - a[1]);
+  if (!porTipo.length) {
+    el.innerHTML = `<div class="card-titulo"><h2>Detalhamento de despesas</h2></div><div class="vazio">Sem despesas no ${periodo}.</div>`;
+    return;
+  }
+  const tipos = porTipo.map(([t]) => t);
+  const tipo = filtrosAtuais.tipo?.valor && tipos.includes(filtrosAtuais.tipo.valor) ? filtrosAtuais.tipo.valor : tipos.includes(tipoDetalhe) ? tipoDetalhe : tipos[0];
+  const cor = paleta.cores.get(tipo) || paleta.corOutros;
+  const doTipo = despesas.filter((d) => tipoDe(d) === tipo);
+  const porDespesa = new Map();
+  for (const d of doTipo) {
+    const k = serieDe(d.nome);
+    const e = porDespesa.get(k) || { nome: d.nome.replace(RX_PARCELA, '').trim(), valor: 0, n: 0 };
+    e.valor += d.valor;
+    e.n++;
+    porDespesa.set(k, e);
+  }
+  const itens = [...porDespesa.entries()].sort((a, b) => b[1].valor - a[1].valor).slice(0, 8);
+  const max = Math.max(...itens.map(([, e]) => e.valor), 1);
+  el.innerHTML = `<div class="card-titulo"><h2>Detalhamento de despesas</h2><span class="sub">${escapeHtml(tipo)} · ${moeda(doTipo.reduce((s, d) => s + d.valor, 0))}</span></div>
+    <div class="detalhe">
+      <div class="detalhe-barras">${itens
+        .map(
+          ([k, e]) => `<button class="detalhe-linha ${ativoNoFiltro('despesa', k) ? 'filtro-ativo' : ''}" ${filtravel('despesa', k, e.nome)}>
+            <span class="d-nome" title="${escapeHtml(e.nome)}">${escapeHtml(e.nome)}${e.n > 1 ? ` <span class="muted">×${e.n}</span>` : ''}</span>
+            <span class="d-trilho"><span class="d-barra" style="width:${(e.valor / max) * 100}%;background:${cor}"></span></span>
+            <span class="d-valor num">${moeda(e.valor)}</span></button>`
+        )
+        .join('')}</div>
+      <div class="detalhe-tipos">${tipos
+        .map((t) => `<button class="${t === tipo ? 'ativo' : ''}" data-detalhe="${escapeHtml(t)}"><i class="swatch" style="background:${paleta.cores.get(t) || paleta.corOutros}"></i>${escapeHtml(t)}</button>`)
+        .join('')}</div>
+    </div>`;
+  for (const b of el.querySelectorAll('[data-detalhe]')) {
+    b.addEventListener('click', () => {
+      tipoDetalhe = b.dataset.detalhe;
+      renderDetalhamento(el, despesas, paleta, app);
+    });
+  }
 }
 
 // ───────────── Blocos ─────────────
@@ -417,25 +506,32 @@ function delta(atual, anterior, subirEhBom) {
   return `<b class="${Math.abs(d) < 0.005 ? '' : bom ? 'pos' : 'neg'}">${subiu ? '▲' : '▼'} ${pct(Math.abs(d))}</b> ${comparacao}`;
 }
 
-function kpi(rotuloKpi, cor, valor, anterior, info, subirEhBom) {
+function cartao({ id, rotuloCartao, cor, valor, classe = '', linhas = [] }) {
   return `<div class="card kpi">
-    <div class="rotulo"><i class="swatch" style="background:${cor}"></i>${rotuloKpi}</div>
-    <div class="valor">${moeda(valor)}</div>
-    <div class="delta">${delta(valor, anterior, subirEhBom)}</div>
-    <div class="delta">${info}</div>
+    <div class="kpi-info">
+      <div class="rotulo">${cor ? `<i class="swatch" style="background:${cor}"></i>` : ''}${rotuloCartao}</div>
+      <div class="valor ${classe}">${valor}</div>
+      ${linhas.map((l) => `<div class="delta">${l}</div>`).join('')}
+    </div>
+    <div class="kpi-spark" id="${id}"></div>
   </div>`;
 }
 
+function kpi(rotuloKpi, cor, valor, anterior, info, subirEhBom, id) {
+  return cartao({ id, rotuloCartao: rotuloKpi, cor, valor: moeda(valor), linhas: [delta(valor, anterior, subirEhBom), info] });
+}
+
 function kpiSaldo(t, filtrado) {
-  if (!t.qtdReceitas && !t.qtdDespesas) {
-    return `<div class="card kpi"><div class="rotulo">Saldo do ${periodo}</div><div class="valor muted">—</div><div class="delta">${periodo} ainda sem lançamentos</div></div>`;
-  }
+  const rot = `Saldo do ${periodo}${filtrado ? ' <span class="badge">sem filtros</span>' : ''}`;
+  if (!t.qtdReceitas && !t.qtdDespesas) return cartao({ id: 'sp-saldo', rotuloCartao: rot, valor: '—', classe: 'muted', linhas: [`${periodo} ainda sem lançamentos`] });
   const positivo = t.saldo >= 0;
-  return `<div class="card kpi">
-    <div class="rotulo">Saldo do ${periodo}${filtrado ? ' <span class="badge">sem filtros</span>' : ''}</div>
-    <div class="valor ${positivo ? 'pos' : 'neg'}">${positivo ? '' : '−'}${moeda(Math.abs(t.saldo))}</div>
-    <div class="delta">${positivo ? '<span class="badge badge-good">✓ Sobrou dinheiro</span>' : '<span class="badge badge-crit">! Gastou mais que recebeu</span>'}</div>
-  </div>`;
+  return cartao({
+    id: 'sp-saldo',
+    rotuloCartao: rot,
+    valor: `${positivo ? '' : '−'}${moeda(Math.abs(t.saldo))}`,
+    classe: positivo ? 'pos' : 'neg',
+    linhas: [positivo ? '<span class="badge badge-good">✓ Sobrou dinheiro</span>' : '<span class="badge badge-crit">! Gastou mais que recebeu</span>'],
+  });
 }
 
 function kpiPoupanca(t, ant, filtrado) {
@@ -446,12 +542,7 @@ function kpiPoupanca(t, ant, filtrado) {
     const dif = (v - va) * 100;
     comp = `<b class="${dif >= 0 ? 'pos' : 'neg'}">${dif >= 0 ? '▲' : '▼'} ${Math.abs(dif).toFixed(0)} p.p.</b> ${comparacao}`;
   }
-  return `<div class="card kpi">
-    <div class="rotulo">Taxa de poupança${filtrado ? ' <span class="badge">sem filtros</span>' : ''}</div>
-    <div class="valor">${v === null ? '—' : pct(v)}</div>
-    <div class="delta">${comp}</div>
-    <div class="delta">da receita que sobrou</div>
-  </div>`;
+  return cartao({ id: 'sp-poupanca', rotuloCartao: `Taxa de poupança${filtrado ? ' <span class="badge">sem filtros</span>' : ''}`, valor: v === null ? '—' : pct(v), linhas: [comp, 'da receita que sobrou'] });
 }
 
 function renderPorTipo(el, dados, mes, filtros) {
@@ -678,7 +769,7 @@ function linhaDespesa(d, editavel) {
     <td>${celula('tipo', tipoDe(d), tipoDe(d), escapeHtml(tipoDe(d)))}</td>
     <td class="opc">${editavel ? seletor('categoria', d) : texto('categoria')}</td>
     <td class="opc">${editavel ? seletor('recorrencia', d) : texto('recorrencia')}</td>
-    <td class="text-2 opc">${d.forma ? celula('forma', d.forma, d.forma, escapeHtml(d.forma)) : ''}</td><td class="tab opc">${escapeHtml(d.parcelas && d.parcelas !== '1/1' ? d.parcelas : '')}</td>
+    <td class="text-2 opc opc-lg">${d.forma ? celula('forma', d.forma, d.forma, escapeHtml(d.forma)) : ''}</td><td class="tab opc opc-lg">${escapeHtml(d.parcelas && d.parcelas !== '1/1' ? d.parcelas : '')}</td>
     <td class="opc">${editavel ? seletor('status', d) : statusBadge(d.status)}</td><td class="num">${moeda(d.valor)}</td>
     ${editavel ? `<td class="acao-linha"><button class="btn btn-ghost btn-icone btn-sm" data-editar="${d._linha}" aria-label="Editar ${escapeHtml(d.nome)}" title="Editar" aria-expanded="${editando === d._linha}">✎</button></td>` : ''}</tr>`;
 }

@@ -4,14 +4,17 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <title>Painel Financeiro</title>
-  <meta name="theme-color" content="#f6f6f4" />
-  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%232a78d6'/%3E%3Cpath d='M9 22V14M16 22V9M23 22v-5' stroke='white' stroke-width='3' stroke-linecap='round'/%3E%3C/svg%3E" />
+  <meta name="theme-color" content="#1c1d3c" />
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='15' fill='%235c62f4'/%3E%3Cpath d='M16 1v15h15A15 15 0 0 0 16 1z' fill='%23d65fc2'/%3E%3C/svg%3E" />
   <link rel="stylesheet" href="css/styles.css" />
 </head>
 <body>
-  <header class="topbar">
-    <div class="topbar-inner">
-      <div class="brand"><span class="brand-dot"></span>Painel Financeiro</div>
+  <div class="layout">
+    <aside class="lateral">
+      <div class="marca">
+        <svg viewBox="0 0 36 36" aria-hidden="true"><circle cx="18" cy="18" r="16" fill="#5c62f4"/><path d="M18 2v16h16A16 16 0 0 0 18 2z" fill="#d65fc2"/><circle cx="18" cy="18" r="6" fill="#1c1d3c"/></svg>
+        <span>Painel<br />Financeiro</span>
+      </div>
       <nav class="nav">
         <a href="#/painel" data-rota="painel">Painel</a>
         <a href="#/previsao" data-rota="previsao">Previsão</a>
@@ -19,14 +22,17 @@
         <a href="#/aprendizado" data-rota="aprendizado">Aprendizado</a>
         <a href="#/config" data-rota="config">Configurações</a>
       </nav>
-      <button class="btn btn-ghost btn-sm btn-tema" id="btn-tema" aria-label="Alternar tema claro e escuro"></button>
-      <button class="sync btn btn-ghost btn-sm" id="btn-atualizar" title="Atualizar agora">
-        <span class="sync-dot"></span><span class="sync-texto">Carregando…</span>
-      </button>
-    </div>
-  </header>
+      <div id="lateral-periodo"></div>
+      <div class="lateral-rodape">
+        <button class="btn btn-ghost btn-sm btn-tema" id="btn-tema" aria-label="Alternar tema claro e escuro"></button>
+        <button class="sync btn btn-ghost btn-sm" id="btn-atualizar" title="Atualizar agora">
+          <span class="sync-dot"></span><span class="sync-texto">Carregando…</span>
+        </button>
+      </div>
+    </aside>
 
-  <main id="app"></main>
+    <main id="app"></main>
+  </div>
 
   <noscript>Este painel precisa de JavaScript.</noscript>
   <script type="module" src="js/main.js"></script>

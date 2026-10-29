@@ -67,6 +67,7 @@ function renderizar() {
   const mesmaPagina = rotaAnterior === estado.rota;
   const y = window.scrollY;
   if (mesmaPagina) raiz.style.minHeight = `${raiz.offsetHeight}px`;
+  if (estado.rota !== 'painel') $('#lateral-periodo').innerHTML = ''; // anos e meses só fazem sentido no Painel
   PAGINAS[estado.rota](raiz, app);
   if (mesmaPagina) {
     raiz.style.minHeight = '';

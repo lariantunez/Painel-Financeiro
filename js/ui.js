@@ -101,7 +101,7 @@ export function graficoColunas(container, opcoes) {
     const x0 = margem.l + i * banda;
     const ativo = destacados.has(i);
     svg += `<g class="alvo" data-i="${i}">`;
-    svg += `<rect class="fundo-hover" x="${x0 + 1}" y="${margem.t}" width="${banda - 2}" height="${plotH}" rx="6" fill="${ativo ? 'var(--hover)' : 'transparent'}"/>`;
+    svg += `<rect class="fundo-hover" x="${x0 + 1}" y="${margem.t}" width="${banda - 2}" height="${plotH}" rx="6" fill="${ativo ? 'var(--selecao)' : 'transparent'}"/>`;
     const inicio = x0 + (banda - grupo) / 2;
     colunas.forEach((c, j) => {
       const xb = inicio + j * (larguraBarra + 2);

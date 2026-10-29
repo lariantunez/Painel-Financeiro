@@ -53,11 +53,22 @@ const COLS_PARCELAS = [
   { id: 'termina', rotulo: 'Termina' },
 ];
 const VALOR_PARCELA = { nome: (a) => a.nome, parcela: (a) => a.n - a.k, valor: (a) => a.valor, restante: (a) => a.restante, termina: (a) => a.termina };
-const ordem = {
+const ORDEM_PADRAO = {
   despesas: { col: 'data', dir: -1 },
   receitas: { col: 'valor', dir: -1 },
   parcelas: { col: 'restante', dir: -1 },
 };
+const ordem = structuredClone(ORDEM_PADRAO);
+
+// Filtros: tipo (gráfico de categorias), busca da tabela e ordenação das colunas
+function temFiltro(filtroTipo) {
+  return Boolean(filtroTipo || busca.trim() || Object.keys(ORDEM_PADRAO).some((k) => ordem[k].col !== ORDEM_PADRAO[k].col || ordem[k].dir !== ORDEM_PADRAO[k].dir));
+}
+
+function atualizarBotaoLimpar(filtroTipo) {
+  const b = document.getElementById('limpar-filtros');
+  if (b) b.hidden = !temFiltro(filtroTipo);
+}
 
 export function renderPainel(raiz, app) {
   const { dados, mes, filtroTipo } = app.estado;
@@ -82,7 +93,10 @@ export function renderPainel(raiz, app) {
         <button class="btn btn-ghost btn-icone" data-mes="1" aria-label="Próximo mês">›</button>
         ${mes !== mesAtual() ? '<button class="btn btn-sm btn-ghost" data-mes="hoje">Hoje</button>' : ''}
       </div>
-      ${filtroTipo ? `<button class="filtro-chip" id="limpar-filtro">Tipo: ${escapeHtml(filtroTipo)} <span aria-hidden="true">×</span></button>` : ''}
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        ${filtroTipo ? `<button class="filtro-chip" id="limpar-filtro">Tipo: ${escapeHtml(filtroTipo)} <span aria-hidden="true">×</span></button>` : ''}
+        <button class="btn btn-sm" id="limpar-filtros" ${temFiltro(filtroTipo) ? '' : 'hidden'}>✕ Limpar filtros</button>
+      </div>
     </div>
 
     <section class="kpis">
@@ -144,6 +158,11 @@ export function renderPainel(raiz, app) {
     b.addEventListener('click', () => app.irParaMes(b.dataset.mes === 'hoje' ? mesAtual() : somarMeses(mes, +b.dataset.mes)));
   }
   $('#limpar-filtro', raiz)?.addEventListener('click', () => app.filtrarTipo(null));
+  $('#limpar-filtros', raiz).addEventListener('click', () => {
+    busca = '';
+    Object.assign(ordem, structuredClone(ORDEM_PADRAO));
+    app.filtrarTipo(null); // redesenha a página inteira
+  });
 
   // Evolução
   const serie = serieMeses(dados, mes, 12, filtroTipo);
@@ -402,6 +421,7 @@ function renderParcelamentos(el, dados, mes) {
       ${ordenar(p.ativos, ordem.parcelas, VALOR_PARCELA).map((a) => `<tr><td>${escapeHtml(a.nome)}<span class="desc-original">${escapeHtml(a.tipo)}</span></td><td class="tab">${a.k}/${a.n}</td><td class="num">${moeda(a.valor)}</td><td class="num">${moeda(a.restante)}</td><td>${nomeMes(a.termina, false)}</td></tr>`).join('') || '<tr><td colspan="5" class="vazio">Nenhum parcelamento ativo.</td></tr>'}
       </tbody></table>`;
     ligarOrdenacao(alvo, COLS_PARCELAS, ordem.parcelas, desenharParcelas);
+    atualizarBotaoLimpar(ctxTabela?.app.estado.filtroTipo);
   };
   desenharParcelas();
   $('details', el).addEventListener('toggle', (e) => (parcelasAbertas = e.target.open));
@@ -451,6 +471,7 @@ function renderTabela(el, t) {
       : '<div class="vazio">Nenhuma receita encontrada.</div>';
     ligarOrdenacao(el, COLS_RECEITAS, ordem.receitas, redesenhar);
   }
+  atualizarBotaoLimpar(ctxTabela?.app.estado.filtroTipo);
 }
 
 // Listas de seleção na tabela (status e categoria): gravam na planilha ao escolher

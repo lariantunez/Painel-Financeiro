@@ -86,8 +86,15 @@ function atualizarSync() {
   else if (estado.ultimaLeitura) txt.textContent = `Atualizado às ${new Date(estado.ultimaLeitura).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`;
 }
 
+// Pedido feito durante outra leitura (ex.: logo após salvar uma edição): essa leitura pode ter
+// começado antes da gravação, então lê de novo quando ela terminar
+let releitura = null;
+
 async function recarregar({ silencioso = false } = {}) {
-  if (estado.carregando) return;
+  if (estado.carregando) {
+    if (!silencioso) releitura = true;
+    return;
+  }
   estado.carregando = true;
   atualizarSync();
   try {
@@ -107,6 +114,10 @@ async function recarregar({ silencioso = false } = {}) {
   } finally {
     estado.carregando = false;
     atualizarSync();
+  }
+  if (releitura) {
+    releitura = null;
+    await recarregar();
   }
 }
 

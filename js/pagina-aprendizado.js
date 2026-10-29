@@ -188,6 +188,7 @@ async function salvar(botao, app, usados) {
     }
     alteradas = new Map();
     excluidas = new Set();
+    app.renderizar();
     await app.recarregar();
   } catch (e) {
     toast(e.message, 'erro', 6000);

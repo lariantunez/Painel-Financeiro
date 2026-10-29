@@ -525,6 +525,7 @@ function ligarSemTipo(raiz, lista, app) {
       if (r.erros?.length) toast(r.erros[0], 'erro', 6000);
       if (r.alteradas) toast(`${r.alteradas} despesa(s) atualizada(s)`);
       classificandoSemTipo = false;
+      app.renderizar();
       await app.recarregar();
     } catch (err) {
       toast(err.message, 'erro', 6000);
@@ -932,6 +933,7 @@ function ligarEdicao(el, t, linhas) {
       }
       editando = null;
       toast(alteracoes.length > 1 ? `${alteracoes.length} lançamentos atualizados na planilha` : 'Despesa atualizada na planilha');
+      ctxTabela.app.renderizar(); // mostra já o que foi salvo; a releitura da planilha vem em seguida
       ctxTabela.app.recarregar();
     } catch (err) {
       toast(err.message, 'erro', 6000);
@@ -1052,6 +1054,7 @@ function ligarEdicaoReceita(el, t, linhas) {
       for (const [x, c] of porLinha) Object.assign(x, c);
       editandoReceita = null;
       toast(porLinha.size > 1 ? `${porLinha.size} receitas atualizadas na planilha` : 'Receita atualizada na planilha');
+      ctxTabela.app.renderizar(); // mostra já o que foi salvo; a releitura da planilha vem em seguida
       ctxTabela.app.recarregar();
     } catch (err) {
       toast(err.message, 'erro', 6000);

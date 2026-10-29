@@ -100,6 +100,16 @@ export function mesAtual() {
   return chaveMes(h.getFullYear(), h.getMonth() + 1);
 }
 
+// "Agosto 2026" · "Jul – Set 2026" · "Nov 2025 – Jan 2026" · "4 meses" (não consecutivos)
+export function rotuloPeriodo(meses) {
+  const m = [...meses].sort();
+  if (m.length === 1) return nomeMes(m[0]);
+  const consecutivos = m.every((x, i) => i === 0 || somarMeses(m[i - 1], 1) === x);
+  if (!consecutivos) return `${m.length} meses`;
+  const [a1, a2] = [m[0].slice(0, 4), m[m.length - 1].slice(0, 4)];
+  return a1 === a2 ? `${MESES[+m[0].slice(5) - 1]} – ${nomeMes(m[m.length - 1], false)}` : `${nomeMes(m[0], false)} – ${nomeMes(m[m.length - 1], false)}`;
+}
+
 export function nomeMes(chave, longo = true) {
   const [a, m] = chave.split('-').map(Number);
   return `${(longo ? MESES_LONGOS : MESES)[m - 1]} ${a}`;

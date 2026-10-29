@@ -69,9 +69,10 @@ function colunaArredondada(x, y, w, h, r = 4) {
 }
 
 // ───────────── Gráfico de colunas (agrupadas) ─────────────
-// opcoes: { rotulos[], series:[{nome, cor, valores[]}], selecionado, tooltip(i), onClick(i), altura }
+// opcoes: { rotulos[], series:[{nome, cor, valores[]}], selecionado (índice ou lista de índices), tooltip(i), onClick(i, evento), altura }
 export function graficoColunas(container, opcoes) {
   const { rotulos, series, selecionado = -1, tooltip, onClick, altura = 220 } = opcoes;
+  const destacados = new Set(Array.isArray(selecionado) ? selecionado : [selecionado]);
   const largura = Math.max(300, container.clientWidth || 600);
   const margem = { t: 8, r: 4, b: 26, l: 52 };
   const plotW = largura - margem.l - margem.r;
@@ -91,7 +92,7 @@ export function graficoColunas(container, opcoes) {
   }
   rotulos.forEach((rot, i) => {
     const x0 = margem.l + i * banda;
-    const ativo = i === selecionado;
+    const ativo = destacados.has(i);
     svg += `<g class="alvo" data-i="${i}">`;
     svg += `<rect class="fundo-hover" x="${x0 + 1}" y="${margem.t}" width="${banda - 2}" height="${plotH}" rx="6" fill="${ativo ? 'var(--hover)' : 'transparent'}"/>`;
     const inicio = x0 + (banda - grupo) / 2;
@@ -114,7 +115,7 @@ export function graficoColunas(container, opcoes) {
       g.addEventListener('mousemove', (e) => mostrarTooltip(e, tooltip(i)));
       g.addEventListener('mouseleave', esconderTooltip);
     }
-    if (onClick) g.addEventListener('click', () => onClick(i));
+    if (onClick) g.addEventListener('click', (e) => onClick(i, e));
   }
 }
 

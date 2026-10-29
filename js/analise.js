@@ -100,7 +100,19 @@ export function nomeDaParcela(nomeNovo, parcela) {
 }
 export const tipoDe = (d) => d.tipo || SEM_TIPO;
 
-const doMes = (lista, mes) => lista.filter((l) => l.mesRef === mes);
+// mes: um mês ('2026-08') ou uma lista de meses (período)
+const doMes = (lista, mes) => {
+  if (!Array.isArray(mes)) return lista.filter((l) => l.mesRef === mes);
+  const conj = new Set(mes);
+  return lista.filter((l) => conj.has(l.mesRef));
+};
+
+// Período imediatamente anterior, com a mesma quantidade de meses
+export function periodoAnterior(meses) {
+  const ordenados = [...meses].sort();
+  const n = ordenados.length;
+  return Array.from({ length: n }, (_, i) => somarMeses(ordenados[0], i - n));
+}
 const soma = (lista) => lista.reduce((t, l) => t + (l.valor || 0), 0);
 
 export function totaisMes(dados, mes, filtroTipo = null) {
@@ -131,19 +143,21 @@ export function serieMeses(dados, mesFim, n = 12, filtroTipo = null) {
   return meses;
 }
 
-// Despesas por tipo no mês + média dos 6 meses anteriores (só meses com lançamentos)
+// Despesas por tipo no período + média dos 6 meses anteriores (só meses com lançamentos),
+// na mesma escala do período (média mensal × nº de meses selecionados)
 export function porTipo(dados, mes) {
+  const meses = Array.isArray(mes) ? [...mes].sort() : [mes];
   const atual = new Map();
-  for (const d of doMes(dados.despesas, mes)) atual.set(tipoDe(d), (atual.get(tipoDe(d)) || 0) + d.valor);
+  for (const d of doMes(dados.despesas, meses)) atual.set(tipoDe(d), (atual.get(tipoDe(d)) || 0) + d.valor);
 
   const anteriores = [];
   for (let i = 1; i <= 6; i++) {
-    const m = somarMeses(mes, -i);
+    const m = somarMeses(meses[0], -i);
     const lista = doMes(dados.despesas, m);
     if (lista.length) anteriores.push(lista);
   }
   const media = new Map();
-  for (const lista of anteriores) for (const d of lista) media.set(tipoDe(d), (media.get(tipoDe(d)) || 0) + d.valor / anteriores.length);
+  for (const lista of anteriores) for (const d of lista) media.set(tipoDe(d), (media.get(tipoDe(d)) || 0) + (d.valor / anteriores.length) * meses.length);
 
   return [...atual.entries()]
     .filter(([, v]) => Math.abs(v) > 0.005)

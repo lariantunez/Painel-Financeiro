@@ -13,7 +13,7 @@ const PAGINAS = { painel: renderPainel, importar: renderImportar, aprendizado: r
 
 const estado = {
   dados: null,
-  mes: mesAtual(),
+  meses: [mesAtual()], // período selecionado no painel (um ou vários meses)
   filtroTipo: null,
   rota: 'painel',
   carregando: false,
@@ -27,7 +27,12 @@ const app = {
   recarregar,
   aplicarTema,
   irParaMes(mes) {
-    estado.mes = mes;
+    estado.meses = [mes];
+    renderizar();
+  },
+  definirMeses(meses) {
+    estado.meses = [...new Set(meses)].sort();
+    if (!estado.meses.length) estado.meses = [mesAtual()];
     renderizar();
   },
   filtrarTipo(tipo) {

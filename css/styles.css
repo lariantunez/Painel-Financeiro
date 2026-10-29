@@ -19,8 +19,9 @@
   --receita: #1baf7a;
   --despesa: #e34948;
   --neutro: #b9b8b0;
+  --serie-b: #eda100; /* segunda cor das divisões (eventual / variável) — nunca cinza nos gráficos */
   --serie-3: #6250d6;
-  --media-fundo: #e4e3dc;
+  --media-fundo: color-mix(in srgb, var(--despesa) 22%, var(--surface));
 
   --good: #0ca30c;
   --good-text: #006300;
@@ -57,8 +58,9 @@
     --receita: #199e70;
     --despesa: #e66767;
     --neutro: #55554f;
+    --serie-b: #c98500;
     --serie-3: #9085e9;
-    --media-fundo: #3a3a37;
+    --media-fundo: color-mix(in srgb, var(--despesa) 30%, var(--surface));
     --good-text: #0ca30c;
     --good-soft: #15291a;
     --warning-soft: #2e2614;
@@ -85,8 +87,9 @@
   --receita: #199e70;
   --despesa: #e66767;
   --neutro: #55554f;
+  --serie-b: #c98500;
   --serie-3: #9085e9;
-  --media-fundo: #3a3a37;
+  --media-fundo: color-mix(in srgb, var(--despesa) 30%, var(--surface));
   --good-text: #0ca30c;
   --good-soft: #15291a;
   --warning-soft: #2e2614;

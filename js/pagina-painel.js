@@ -534,8 +534,8 @@ function renderComposicao(el, despesas) {
   const divisao = (campo, a, valA, rotA, corA, b, valB, rotB) => {
     const parte = (v, cor, flex) => `<div class="split-parte ${apagadoNoFiltro(campo, v) ? 'apagada' : ''}" style="flex:${Math.max(flex, 0)};background:${cor}" ${filtravel(campo, v, v === valA ? rotA : rotB)}></div>`;
     const item = (v, cor, rot, valor) => `<button class="legenda-filtro ${ativoNoFiltro(campo, v) ? 'filtro-ativo' : ''} ${apagadoNoFiltro(campo, v) ? 'apagada' : ''}" ${filtravel(campo, v, rot)}><i class="swatch" style="background:${cor}"></i>${rot} <b class="num">${moeda(valor)}</b> <span class="muted">${pct(valor / total)}</span></button>`;
-    return `<div class="split">${parte(valA, corA, a)}${parte(valB, 'var(--neutro)', b)}</div>
-      <div class="legenda" style="justify-content:space-between;margin-bottom:12px">${item(valA, corA, rotA, a)}${item(valB, 'var(--neutro)', rotB, b)}</div>`;
+    return `<div class="split">${parte(valA, corA, a)}${parte(valB, 'var(--serie-b)', b)}</div>
+      <div class="legenda" style="justify-content:space-between;margin-bottom:12px">${item(valA, corA, rotA, a)}${item(valB, 'var(--serie-b)', rotB, b)}</div>`;
   };
   el.innerHTML = `<div class="card-titulo"><h2>Composição das despesas</h2><span class="sub">clique para filtrar</span></div>
     ${divisao('recorrencia', mensal, 'MENSAL', 'Mensal', 'var(--accent)', total - mensal, 'EVENTUAL', 'Eventual')}

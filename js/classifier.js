@@ -162,7 +162,8 @@ export function criarClassificador({ regras = [], despesas = [], receitas = [], 
     return melhor;
   }
 
-  function classificar(tx, origem, instituicao) {
+  // mesFatura: mês de referência único para toda a fatura do cartão (ex.: '2026-09')
+  function classificar(tx, origem, instituicao, mesFatura) {
     const descN = rotulo(tx.descricao);
     let chave = chaveDescricao(tx.descricao);
     const data = tx.data;
@@ -174,7 +175,10 @@ export function criarClassificador({ regras = [], despesas = [], receitas = [], 
       origem,
       instituicao: instituicao || 'NUBANK',
       vencimento: dataBR(data),
-      mesRef: origem === 'cartao' && data.dia < diaFechamento ? somarMeses(chaveMes(data.ano, data.mes), -1) : chaveMes(data.ano, data.mes),
+      mesRef:
+        origem === 'cartao'
+          ? mesFatura || (data.dia < diaFechamento ? somarMeses(chaveMes(data.ano, data.mes), -1) : chaveMes(data.ano, data.mes))
+          : chaveMes(data.ano, data.mes),
       valor: tx.valor,
       destino: 'DESPESA',
       nome: nomeSugerido(tx.descricao),
@@ -320,7 +324,7 @@ export function criarClassificador({ regras = [], despesas = [], receitas = [], 
 
   return {
     classificarExtrato(extrato) {
-      const lista = extrato.transacoes.map((tx) => classificar(tx, extrato.origem, extrato.instituicao));
+      const lista = extrato.transacoes.map((tx) => classificar(tx, extrato.origem, extrato.instituicao, extrato.mesFatura));
       marcarDuplicados(lista);
       return lista;
     },

@@ -32,7 +32,7 @@ function mesesEntre(de, ate) {
   return (a2 - a1) * 12 + (m2 - m1);
 }
 
-export function montarFixas({ despesas, receitas, mesAlvo, instituicaoCartao = 'NUBANK' }) {
+export function montarFixas({ despesas, receitas, mesAlvo, instituicaoCartao = 'NUBANK', regras = [] }) {
   const limite = somarMeses(mesAlvo, -MESES_SEM_APARECER);
 
   // ── Despesas fixas ──
@@ -101,11 +101,18 @@ export function montarFixas({ despesas, receitas, mesAlvo, instituicaoCartao = '
   itensDespesa.sort((a, b) => (parseData(a.vencimento)?.dia || 0) - (parseData(b.vencimento)?.dia || 0));
 
   // ── Receitas fixas (ex.: salários) ──
+  // As que chegam pelo extrato (há regra que as reconhece) não entram no checklist, para não contar duas vezes
+  const pelaConta = new Set(regras.filter((r) => r.destino === 'RECEITA').map((r) => `${rotulo(r.tipo)}|${rotulo(r.titular)}`));
+  const viaExtrato = new Set();
   const porSerieReceita = new Map();
   const contagemNoAlvo = new Map();
   for (const r of receitas) {
     if (rotulo(r.categoria) !== 'FIXO' || !r.mesRef) continue;
     const serie = `${rotulo(r.tipo)}|${rotulo(r.nome)}`;
+    if (pelaConta.has(serie)) {
+      viaExtrato.add(r.tipo);
+      continue;
+    }
     if (r.mesRef === mesAlvo) {
       contagemNoAlvo.set(serie, (contagemNoAlvo.get(serie) || 0) + 1);
       continue;
@@ -135,7 +142,7 @@ export function montarFixas({ despesas, receitas, mesAlvo, instituicaoCartao = '
     });
   }
 
-  return { despesas: itensDespesa, receitas: itensReceita, viaCartao: [...new Set(viaCartao)].sort() };
+  return { despesas: itensDespesa, receitas: itensReceita, viaCartao: [...new Set(viaCartao)].sort(), receitasViaExtrato: [...viaExtrato] };
 }
 
 export function fixasParaLinhas(fixas, mesAlvo) {

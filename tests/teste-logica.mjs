@@ -154,6 +154,11 @@ if (pasta) {
     assert.equal(por(lc, 'Mercadolivre').mesRef, '2026-09'); // 12/09 -> setembro
     assert.equal(por(ld, 'Compra no débito').mesRef, '2026-09'); // débito em 05/09 -> setembro
   });
+  teste('Fatura inteira vai para o mês escolhido, mesmo com compras do mês atual', () => {
+    const csv = 'date,title,amount\n2026-10-06,Shopee *Kuangre,"25,90"\n2026-09-08,Netflix Entretenimento,"44,90"';
+    const ex = { ...lerExtrato(csv, 'Nubank.csv'), mesFatura: '2026-09' };
+    assert.deepEqual(criarClassificador({ despesas, receitas }).classificarExtrato(ex).map((l) => l.mesRef), ['2026-09', '2026-09']);
+  });
   teste('Parcela seguinte com mesmo valor não é duplicata', () => {
     const l = criarClassificador({ despesas, receitas }).classificarExtrato(lerExtrato('date,title,amount\n2026-09-07,LIVELO - NuPay - Parcela 2/10,"299,48"', 'f.csv'))[0];
     assert.equal(l.possivelDuplicado, false);
@@ -177,6 +182,15 @@ if (pasta) {
     const l = fixasParaLinhas(fixas, '2026-10');
     assert.ok(l.despesas.every((d) => d.MES_DE_REFERENCIA === '10/2026'));
     assert.equal(l.despesas.find((d) => d.NOME_DESPESA === 'Condomínio').CATEGORIA, 'FIXO');
+  });
+  teste('Salário que chega por Pix (regra) sai do checklist de receitas', () => {
+    const regras = [{ chave: '+ DOUGLAS SILVA BOTEELHO', destino: 'RECEITA', nome: 'Salario Douglas', tipo: 'Salario Douglas', categoria: 'FIXO', titular: 'DOUGLAS', usos: 0 }];
+    const f2 = montarFixas({ despesas, receitas, mesAlvo: '2026-10', regras });
+    assert.ok(!f2.receitas.some((x) => x.titular === 'DOUGLAS'));
+    assert.ok(f2.receitas.some((x) => x.titular === 'LARISSA'));
+    const pix = 'Data,Valor,Identificador,Descrição\n16/09/2026,2500.00,z9,Transferência recebida pelo Pix - DOUGLAS SILVA BOTEELHO - •••.989.188-•• - BCO BRADESCO S.A. (0237) Agência: 1 Conta: 2';
+    const l = criarClassificador({ despesas, receitas, regras, titulares: { NUBANK: 'LARISSA' } }).classificarExtrato(lerExtrato(pix, 'NU_x.csv'))[0];
+    assert.deepEqual([l.destino, l.tipo, l.titular, l.categoria, l.confianca], ['RECEITA', 'Salario Douglas', 'DOUGLAS', 'FIXO', 'certo']);
   });
   teste('Recorrente pago fora do Nubank entra no checklist mantendo a categoria', () => {
     const f = fixas.despesas.find((x) => x.nome.startsWith('Financiamento Apartamento'));

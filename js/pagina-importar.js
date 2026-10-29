@@ -121,6 +121,12 @@ function passoArquivos(el, app) {
       reclassificar(app);
     });
   }
+  for (const s of $$('[data-arq-mes]', el)) {
+    s.addEventListener('change', () => {
+      imp.arquivos[+s.dataset.arqMes].mesFatura = s.value;
+      reclassificar(app);
+    });
+  }
   for (const b of $$('[data-arq-remover]', el)) {
     b.addEventListener('click', () => {
       imp.arquivos.splice(+b.dataset.arqRemover, 1);
@@ -143,6 +149,12 @@ function linhaArquivo(a, i) {
     </select>
     <select class="select select-sm" data-arq-inst="${i}" aria-label="Banco">${INSTITUICOES.map((n) => `<option ${n === a.instituicao ? 'selected' : ''}>${n}</option>`).join('')}</select>
     <button class="btn btn-sm btn-ghost" data-arq-remover="${i}">Remover</button>
+    ${
+      a.origem === 'cartao'
+        ? `<label class="small text-2" style="grid-column:1/-1;display:flex;align-items:center;gap:8px">Mês da fatura (vale para todas as compras do arquivo)
+        <select class="select select-sm" style="width:auto" data-arq-mes="${i}">${[-3, -2, -1, 0].map((n) => somarMeses(mesAtual(), n)).map((m) => `<option value="${m}" ${m === a.mesFatura ? 'selected' : ''}>${nomeMes(m)}</option>`).join('')}</select></label>`
+        : ''
+    }
   </div>`;
 }
 
@@ -156,7 +168,8 @@ async function adicionarArquivos(arquivos, app) {
       const texto = decodificar(await f.arrayBuffer());
       const extrato = lerExtrato(texto, f.name);
       if (!extrato.transacoes.length) throw new Error('Nenhuma movimentação encontrada no arquivo.');
-      imp.arquivos.push({ nome: f.name, tamanho: f.size, extrato, origem: extrato.origem, instituicao: extrato.instituicao || config.instituicaoCartao });
+      // A fatura inteira conta para o mês anterior, mesmo com compras feitas no mês atual
+      imp.arquivos.push({ nome: f.name, tamanho: f.size, extrato, origem: extrato.origem, instituicao: extrato.instituicao || config.instituicaoCartao, mesFatura: somarMeses(mesAtual(), -1) });
     } catch (e) {
       imp.arquivos.push({ nome: f.name, tamanho: f.size, erro: e.message });
     }
@@ -175,11 +188,11 @@ function decodificar(buffer) {
 // Reclassifica tudo, preservando o que o usuário já editou
 function reclassificar(app) {
   const editados = new Map(imp.lancamentos.filter((l) => l.editado).map((l) => [l.id, l]));
-  const cls = criarClassificador({ ...app.estado.dados, titulares: config.titulares, diaFechamento: config.diaFechamento });
+  const cls = criarClassificador({ ...app.estado.dados, titulares: config.titulares });
   imp.lancamentos = [];
   for (const a of imp.arquivos) {
     if (a.erro) continue;
-    const extrato = { ...a.extrato, origem: a.origem, instituicao: a.instituicao };
+    const extrato = { ...a.extrato, origem: a.origem, instituicao: a.instituicao, mesFatura: a.origem === 'cartao' ? a.mesFatura : null };
     for (const l of cls.classificarExtrato(extrato)) imp.lancamentos.push(editados.get(l.id) || l);
   }
   for (const l of imp.lancamentos) if (l.possivelDuplicado && l.excluir === undefined) l.excluir = true;
@@ -247,6 +260,7 @@ function passoFixas(el, app) {
         ? `<div class="card">
       <div class="card-titulo"><h2>Receitas fixas · ${nomeMes(imp.mesFixas)}</h2><span class="sub">Salários e outras entradas recorrentes</span></div>
       ${f.receitas.map((x, i) => linhaReceitaFixa(x, i)).join('')}
+      ${f.receitasViaExtrato.length ? `<p class="small muted" style="margin:14px 0 0">Chegam pelo extrato da conta e são reconhecidas na importação: ${f.receitasViaExtrato.map(escapeHtml).join(', ')}.</p>` : ''}
     </div>`
         : ''
     }

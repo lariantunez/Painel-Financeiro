@@ -329,8 +329,17 @@ export function renderPainel(raiz, app) {
   };
   const segPeriodo = segs(despesasPeriodo);
   const segAno = segs(despesasAno);
-  rosca($('#rosca-periodo', raiz), { segmentos: segPeriodo, centro: moedaCurta(totalPeriodo), sub: totalAno ? `${pct(totalPeriodo / totalAno, 1)} do ano` : '', tooltip: dicaRosca(segPeriodo) });
-  rosca($('#rosca-ano', raiz), { segmentos: segAno, centro: moedaCurta(totalAno), sub: `${new Set(despesasAno.map((d) => d.mesRef)).size} mês(es) com gastos`, tooltip: dicaRosca(segAno) });
+  // Com tipo filtrado, as fatias dos outros tipos ficam apagadas (contexto) e o centro mostra só o filtrado
+  const tipoFiltrado = filtros.tipo?.valor;
+  const doTipo = (lista) => lista.filter((d) => tipoDe(d) === tipoFiltrado).reduce((s, d) => s + d.valor, 0);
+  const centroPeriodo = tipoFiltrado
+    ? { centro: moedaCurta(doTipo(despesasPeriodo)), sub: `${tipoFiltrado} · ${pct(totalPeriodo ? doTipo(despesasPeriodo) / totalPeriodo : 0, 1)} do ${periodo}` }
+    : { centro: moedaCurta(totalPeriodo), sub: totalAno ? `${pct(totalPeriodo / totalAno, 1)} do ano` : '' };
+  const centroAno = tipoFiltrado
+    ? { centro: moedaCurta(doTipo(despesasAno)), sub: `${tipoFiltrado} · ${pct(totalAno ? doTipo(despesasAno) / totalAno : 0, 1)} do ano` }
+    : { centro: moedaCurta(totalAno), sub: `${new Set(despesasAno.map((d) => d.mesRef)).size} mês(es) com gastos` };
+  rosca($('#rosca-periodo', raiz), { segmentos: segPeriodo, ...centroPeriodo, tooltip: dicaRosca(segPeriodo) });
+  rosca($('#rosca-ano', raiz), { segmentos: segAno, ...centroAno, tooltip: dicaRosca(segAno) });
   const somaPeriodoTipo = somarPor(despesasPeriodo, tipoDe);
   const somaAnoTipo = somarPor(despesasAno, tipoDe);
   $('#participacao', raiz).innerHTML = paleta.principais.length

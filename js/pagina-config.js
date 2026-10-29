@@ -41,7 +41,8 @@ export function renderConfig(raiz, app) {
       <div class="config-grade">
         <label class="campo">Cartão de crédito principal<span class="dica">Contas fixas pagas nele vêm pela fatura e não entram no checklist</span>
           <select class="select" id="cfg-cartao">${INSTITUICOES.map((i) => `<option ${i === config.instituicaoCartao ? 'selected' : ''}>${i}</option>`).join('')}</select></label>
-        <div></div>
+        <label class="campo">Dia em que a fatura fecha<span class="dica">Compras antes desse dia entram no mês anterior (ciclo da fatura)</span>
+          <input class="input" id="cfg-fechamento" type="number" min="1" max="28" value="${config.diaFechamento}"></label>
         ${INSTITUICOES.map((i) => `<label class="campo">Quem recebe na conta ${i}<span class="dica">Preenche a coluna NOME das receitas</span><input class="input" data-titular="${i}" value="${escapeHtml(config.titulares[i] || '')}"></label>`).join('')}
       </div>
     </div>
@@ -83,6 +84,7 @@ export function renderConfig(raiz, app) {
       toast('Não consegui copiar o link', 'erro');
     }
   });
+  $('#cfg-fechamento', raiz).addEventListener('change', (e) => salvarConfig({ diaFechamento: Math.min(28, Math.max(1, +e.target.value || 7)) }));
   $('#cfg-cartao', raiz).addEventListener('change', (e) => salvarConfig({ instituicaoCartao: e.target.value }));
   for (const i of $$('[data-titular]', raiz)) {
     i.addEventListener('change', () => salvarConfig({ titulares: { ...config.titulares, [i.dataset.titular]: i.value.trim().toUpperCase() } }));

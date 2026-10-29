@@ -24,6 +24,7 @@ function novoEstado() {
     resultado: null,
     enviando: false,
     tiposExtras: [],
+    selecionados: new Set(),
   };
 }
 
@@ -174,7 +175,7 @@ function decodificar(buffer) {
 // Reclassifica tudo, preservando o que o usuário já editou
 function reclassificar(app) {
   const editados = new Map(imp.lancamentos.filter((l) => l.editado).map((l) => [l.id, l]));
-  const cls = criarClassificador({ ...app.estado.dados, titulares: config.titulares });
+  const cls = criarClassificador({ ...app.estado.dados, titulares: config.titulares, diaFechamento: config.diaFechamento });
   imp.lancamentos = [];
   for (const a of imp.arquivos) {
     if (a.erro) continue;
@@ -379,6 +380,7 @@ function passoRevisar(el, app) {
   const secao = (id, titulo, sub, aberta) =>
     grupos[id].length
       ? `<details class="secao card" style="margin-bottom:12px" ${aberta ? 'open' : ''}><summary>${titulo} <span class="badge">${grupos[id].length}</span><span class="muted small" style="font-weight:400">${sub}</span></summary>
+         ${id === 'atencao' ? barraLote(ctx) : ''}
          <div style="margin-top:8px">${grupos[id].map((i) => linhaRevisao(imp.lancamentos[i], i, ctx)).join('')}</div></details>`
       : '';
 
@@ -414,7 +416,29 @@ function passoRevisar(el, app) {
     irPara(3, app);
   });
   atualizarPendencias(el);
-  ligarRevisao(el, app, ctx);
+  $('#lote-ignorar', el)?.addEventListener('click', () => {
+    for (const i of imp.selecionados) {
+      imp.lancamentos[i].destino = 'IGNORAR';
+      decidir(imp.lancamentos[i]);
+    }
+    imp.selecionados = new Set();
+    redesenhar(el, app);
+  });
+  el._ctx = ctx;
+  if (!el._ligado) {
+    ligarRevisao(el, app);
+    el._ligado = true;
+  }
+}
+
+// Classificação em lote: marque vários lançamentos e aplique o mesmo tipo
+function barraLote(ctx) {
+  const n = imp.selecionados.size;
+  return `<div class="lote">
+    <label><input type="checkbox" id="sel-todos" ${n ? 'checked' : ''}> ${n ? `${n} selecionado(s)` : 'Selecionar despesas sem tipo'}</label>
+    ${n ? `<select class="select select-sm" id="lote-tipo" aria-label="Tipo para os selecionados"><option value="">Aplicar tipo…</option>${ctx.tipos.map((t) => `<option>${escapeHtml(t)}</option>`).join('')}</select>
+    <button class="btn btn-sm" id="lote-ignorar">Ignorar selecionados</button>` : '<span class="muted small">ou marque cada linha para classificar várias de uma vez</span>'}
+  </div>`;
 }
 
 function miniResumo(rotuloResumo, n) {
@@ -443,7 +467,7 @@ function linhaRevisao(l, i, ctx) {
   const parcela = l.parcelas && l.parcelas !== '1/1' ? ` · parcela ${l.parcelas}` : '';
   const podePerguntar = !travado && l.destino !== 'IGNORAR' && l.secao === 'atencao';
   return `<div class="revisao-item ${ignorado ? 'ignorado' : ''} ${l.secao === 'atencao' ? 'pendente' : ''}" data-rev="${i}">
-    <div class="num small r-data">${l.vencimento.slice(0, 5)}<div class="muted">${l.origem === 'cartao' ? 'cartão' : 'conta'}</div></div>
+    <div class="num small r-data">${l.secao === 'atencao' && !travado ? `<input type="checkbox" data-sel="${i}" ${imp.selecionados.has(i) ? 'checked' : ''} aria-label="Selecionar"> ` : ''}${l.vencimento.slice(0, 5)}<div class="muted">${l.origem === 'cartao' ? 'cartão' : 'conta'}</div></div>
     <div class="desc">
       <input class="input input-sm" data-c="nome" value="${escapeHtml(l.nome)}" ${travado || l.destino !== 'DESPESA' ? 'disabled' : ''} aria-label="Nome">
       <div class="orig" title="${escapeHtml(l.descricaoOriginal)}">${escapeHtml(l.descricaoOriginal)}</div>
@@ -461,8 +485,32 @@ function linhaRevisao(l, i, ctx) {
   </div>`;
 }
 
-function ligarRevisao(el, app, ctx) {
+function ligarRevisao(el, app) {
   el.addEventListener('change', (e) => {
+    const ctx = el._ctx;
+    if (e.target.dataset.sel !== undefined) {
+      const i = +e.target.dataset.sel;
+      if (e.target.checked) imp.selecionados.add(i);
+      else imp.selecionados.delete(i);
+      redesenhar(el, app);
+      return;
+    }
+    if (e.target.id === 'sel-todos') {
+      imp.selecionados = new Set();
+      if (e.target.checked) imp.lancamentos.forEach((l, i) => l.secao === 'atencao' && l.destino === 'DESPESA' && !l.tipo && imp.selecionados.add(i));
+      redesenhar(el, app);
+      return;
+    }
+    if (e.target.id === 'lote-tipo' && e.target.value) {
+      for (const i of imp.selecionados) {
+        const l = imp.lancamentos[i];
+        Object.assign(l, { destino: 'DESPESA', tipo: e.target.value });
+        decidir(l);
+      }
+      imp.selecionados = new Set();
+      redesenhar(el, app);
+      return;
+    }
     const campo = e.target.closest('[data-c]');
     const linha = e.target.closest('[data-rev]');
     if (!campo || !linha) return;
@@ -534,6 +582,10 @@ function montarEnvio() {
   const lanc = paraLinhasPlanilha(imp.lancamentos);
   const fixas = imp.fixas ? fixasParaLinhas({ ...imp.fixas, despesas: [...imp.fixas.despesas, ...imp.novasFixas.filter((n) => n.nome).map((n) => ({ ...n, serie: serieDe(n.nome) }))] }, imp.mesFixas) : { despesas: [], receitas: [] };
   const regras = regrasAPartirDe(imp.lancamentos);
+  // Contas já lançadas como "A PAGAR" que apareceram pagas no extrato
+  const pagasNoExtrato = imp.lancamentos
+    .filter((l) => l.possivelDuplicado && l.excluir && l.duplicadoDe && rotulo(l.duplicadoDe.status) === 'A PAGAR')
+    .map((l) => ({ aba: 'despesas', linha: l.duplicadoDe._linha, nome: l.duplicadoDe.nome, campos: { STATUS: 'PAGO' } }));
   // Fixas que já estavam na planilha e tiveram status/valor alterado aqui
   const alteracoes = (imp.fixas?.despesas || [])
     .filter((f) => f.jaLancado && (rotulo(f.status) !== rotulo(f.jaLancado.status) || Math.abs(parseValor(f.valor) - Math.abs(f.jaLancado.valor)) > 0.009))
@@ -542,7 +594,7 @@ function montarEnvio() {
     despesas: [...fixas.despesas, ...lanc.despesas],
     receitas: [...fixas.receitas, ...lanc.receitas],
     regras,
-    alteracoes,
+    alteracoes: [...alteracoes, ...pagasNoExtrato.filter((p) => !alteracoes.some((a) => a.linha === p.linha))],
     qtdFixas: fixas.despesas.length + fixas.receitas.length,
   };
 }

@@ -1,0 +1,12 @@
+# Extratos e dados financeiros nunca vão para o GitHub
+Bases/
+*.csv
+*.ofx
+*.OFX
+*.pdf
+*.xlsx
+
+# Configuração local do backend (contém o token)
+.clasp.json
+apps-script/Token.gs
+apps-script/.clasp.json

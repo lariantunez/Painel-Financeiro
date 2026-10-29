@@ -14,6 +14,7 @@ const CONFIG_PADRAO = {
   token: '',
   planilhaId: PLANILHA_PADRAO,
   instituicaoCartao: 'NUBANK',
+  diaFechamento: 7,
   titulares: { NUBANK: 'LARISSA', BRADESCO: 'DOUGLAS', 'ITAÚ': 'LARISSA' },
   tema: 'auto',
 };

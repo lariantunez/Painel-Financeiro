@@ -377,6 +377,10 @@ table.tabela { width: 100%; border-collapse: collapse; font-size: 13px; }
 .revisao-item.ignorado .desc, .revisao-item.ignorado .num { opacity: 0.45; text-decoration: line-through; }
 .revisao-item .falta { border-color: var(--warning); background: var(--warning-soft); }
 
+.lote { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 10px 12px; margin-top: 10px; background: var(--surface-2); border-radius: var(--radius-sm); }
+.lote label { display: flex; align-items: center; gap: 6px; font-weight: 500; }
+.lote .select { width: auto; }
+.r-data input[type='checkbox'] { accent-color: var(--text); vertical-align: -2px; }
 .resumo { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin-bottom: 16px; }
 .resumo .card .valor { font-size: 22px; font-weight: 650; }
 

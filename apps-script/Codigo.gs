@@ -86,7 +86,8 @@ function responder_(fn) {
 }
 
 function autenticar_(token) {
-  const esperado = PropertiesService.getScriptProperties().getProperty('TOKEN');
+  // TOKEN_INSTALACAO vem do arquivo Token.gs quando o backend é instalado via clasp (não vai para o GitHub)
+  const esperado = PropertiesService.getScriptProperties().getProperty('TOKEN') || (typeof TOKEN_INSTALACAO !== 'undefined' ? TOKEN_INSTALACAO : '');
   if (!esperado) throw new Error('Backend não configurado: execute a função "configurar" no Apps Script.');
   if (token !== esperado) throw new Error('Token inválido.');
 }
@@ -239,7 +240,9 @@ function atualizarStatus_(alteracoes) {
     }
     Object.keys(a.campos || {}).forEach((campo) => {
       const j = cab.indexOf(campo);
-      if (j >= 0) aba.getRange(linha, j + 1).setValue(campo === 'VALOR' ? Number(a.campos[campo]) : a.campos[campo]);
+      if (j < 0) return;
+      const celula = aba.getRange(linha, j + 1);
+      celula.setValue(converter_(campo, a.campos[campo], celula.getValue()));
     });
     feitas++;
   });

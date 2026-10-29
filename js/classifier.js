@@ -2,7 +2,7 @@
 // usando (1) regras automáticas, (2) continuação de parcelamentos, (3) regras aprendidas e
 // (4) o histórico da própria planilha. O que não tiver certeza vira pergunta para o usuário.
 
-import { rotulo, dataBR, mesRefBR, chaveMes, parseParcela, RX_PARCELA, capitalizar, arred } from './util.js';
+import { rotulo, dataBR, mesRefBR, chaveMes, somarMeses, parseParcela, RX_PARCELA, capitalizar, arred } from './util.js';
 
 export const DESTINOS = ['DESPESA', 'RECEITA', 'IGNORAR'];
 export const FORMAS = ['DÉBITO', 'CRÉDITO A VISTA', 'CRÉDITO PARCELADO', 'DÉBITO EM CONTA', 'BOLETO', 'PIX'];
@@ -10,7 +10,10 @@ export const FORMAS_RECEITA = ['PIX', 'DEPÓSITO EM CONTA', 'DÉBITO EM CONTA'];
 export const CATEGORIAS = ['VARIÁVEL', 'FIXO'];
 
 const STOPWORDS = new Set(
-  'DE DA DO DOS DAS E EM NO NA COM POR PARA LTDA SA S A ME EIRELI EPP COMERCIO COM BR BRASIL MP PG PAG IFD EC DL PP PAGSEGURO PAYPAL EBANX PICPAY MERCADOPAGO NUPAY SUMUP STONE CIELO GETNET HTM IZ SQ LOJA LOJAS'.split(' ')
+  ('DE DA DO DOS DAS E EM NO NA COM POR PARA LTDA SA S A ME EIRELI EPP COMERCIO COM BR BRASIL MP PG PAG IFD EC DL DM PP MTZ HNA ' +
+    'PAGSEGURO PAYPAL EBANX PICPAY MERCADOPAGO NUPAY SUMUP STONE CIELO GETNET HTM IZ SQ LOJA LOJAS OSASCO SAO PAULO SP ' +
+    // marketplaces: a palavra não diz nada sobre o que foi comprado
+    'SHOPEE AMAZON AMAZONMKTPLC MERCADOLIVRE MERCADO LIVRE ALIEXPRESS MAGALU SHEIN').split(' ')
 );
 
 // ───────────── Normalização da descrição do banco ─────────────
@@ -31,7 +34,7 @@ const PREFIXOS_CONTA = [
 // Movimentos que nunca são despesa/receita (o gasto real já aparece em outro lugar)
 const IGNORAR_AUTOMATICO = [
   [/PAGAMENTO (DE FATURA|RECEBIDO|EFETUADO)|^PAGAMENTO FATURA|FATURA NUBANK/, 'Pagamento da fatura do cartão'],
-  [/APLICACAO RDB|RESGATE RDB|CAIXINHA|GUARDADO|RESGATE|APLICACAO|INVESTIMENTO/, 'Movimentação de investimento/caixinha'],
+  [/^(APLICACAO|RESGATE) RDB|CAIXINHA|^DINHEIRO GUARDADO|^GUARDADO NA|^RESGATE DE DINHEIRO GUARDADO/, 'Movimentação de investimento/caixinha'],
 ];
 
 export function limparDescricao(desc) {
@@ -40,6 +43,8 @@ export function limparDescricao(desc) {
   s = s.replace(/^ESTORNO( DE)?\s*/, '').replace(/^"|"$/g, '');
   for (const [rx] of PREFIXOS_CONTA) s = s.replace(rx, '');
   s = s.replace(/^\s*-\s*/, '');
+  s = s.replace(/\s*\(TRANSFERENCIA (ENVIADA|RECEBIDA)\)/, '');
+  s = s.replace(/^[\d./-]{6,}\s+/, ''); // CNPJ/CPF no começo do nome
   // Pix/transferência: "NOME DA PESSOA - •••.123.456-•• - BANCO (0260) Agência..." -> nome
   s = s.split(/\s+-\s+/)[0];
   return s.replace(/[•*"]/g, ' ').replace(/\s+/g, ' ').trim();
@@ -53,8 +58,9 @@ export function chaveDescricao(desc) {
     .join(' ');
 }
 
+// Palavras significativas (sem conectivos, intermediadores de pagamento, cidades e códigos como "P4703")
 function tokens(chave) {
-  return chave.split(' ').filter((t) => t.length >= 3 && !STOPWORDS.has(t) && !/^\d+$/.test(t));
+  return chave.split(' ').filter((t) => t.length >= 3 && !STOPWORDS.has(t) && !/\d/.test(t));
 }
 
 // "DROGASIL" ~ "DROGASILS", mas "MERCADOLIVRE" não é "MERCADO"
@@ -69,7 +75,9 @@ function similaridade(tokA, tokB) {
   for (const a of tokA) {
     if (tokB.some((b) => a === b || prefixoForte(a, b))) acertos++;
   }
-  return acertos / Math.max(tokA.length, Math.min(tokB.length, tokA.length + 1));
+  const score = acertos / Math.max(tokA.length, Math.min(tokB.length, tokA.length + 1));
+  // Mesmo nome principal ("WELLHUB LARISSA" ~ "WELLHUB") é um sinal forte
+  return tokA[0] === tokB[0] && tokA[0].length >= 5 ? Math.max(score, 0.7) : score;
 }
 
 function nomeSugerido(desc) {
@@ -119,20 +127,17 @@ function dominante(contagem) {
 
 // ───────────── Classificador ─────────────
 
-export function criarClassificador({ regras = [], despesas = [], receitas = [], titulares = {} } = {}) {
+// diaFechamento: compras do cartão a partir desse dia contam para o mês; antes dele, para o mês anterior (ciclo da fatura)
+export function criarClassificador({ regras = [], despesas = [], receitas = [], titulares = {}, diaFechamento = 7 } = {}) {
   const mapaRegras = new Map(regras.map((r) => [r.chave, r]));
   const tokRegras = regras.map((r) => ({ r, tok: tokens(r.chave) }));
   const historico = indexarHistorico(despesas, receitas);
   const idsExistentes = new Set([...despesas, ...receitas].map((r) => r.id).filter(Boolean));
   const parcelasUsadas = new Set();
 
-  // Linhas antigas (sem ID) que podem ser o mesmo lançamento já digitado à mão
-  const legado = new Map();
-  for (const d of despesas) {
-    if (d.id || !d.data) continue;
-    const k = `${d.data.ano}-${d.data.mes}-${d.data.dia}|${arred(Math.abs(d.valor))}`;
-    legado.set(k, (legado.get(k) || 0) + 1);
-  }
+  // Linhas digitadas à mão (sem ID) que podem ser o mesmo lançamento do extrato
+  // (inclui as contas fixas lançadas pelo painel, que não têm descrição original do banco)
+  const legado = despesas.filter((d) => !d.descOriginal && d.data && d.valor > 0);
 
   function continuacaoParcela(tx, base, k, n) {
     if (k <= 1) return null;
@@ -169,7 +174,7 @@ export function criarClassificador({ regras = [], despesas = [], receitas = [], 
       origem,
       instituicao: instituicao || 'NUBANK',
       vencimento: dataBR(data),
-      mesRef: chaveMes(data.ano, data.mes),
+      mesRef: origem === 'cartao' && data.dia < diaFechamento ? somarMeses(chaveMes(data.ano, data.mes), -1) : chaveMes(data.ano, data.mes),
       valor: tx.valor,
       destino: 'DESPESA',
       nome: nomeSugerido(tx.descricao),
@@ -266,12 +271,12 @@ export function criarClassificador({ regras = [], despesas = [], receitas = [], 
     let melhor = null;
     for (const { r, tok: t } of tokRegras) {
       const s = similaridade(tok, t);
-      if (s >= 0.5 && (!melhor || s > melhor.s)) melhor = { s, fonte: r, rotulo: r.nome };
+      if (s >= 0.6 && (!melhor || s > melhor.s)) melhor = { s, fonte: r, rotulo: r.nome };
     }
     for (const h of historico.values()) {
       if (h.destino !== lanc.destino) continue;
       const s = similaridade(tok, h.tok);
-      if (s >= 0.5 && (!melhor || s > melhor.s + 0.05)) {
+      if (s >= 0.6 && (!melhor || s > melhor.s + 0.05)) {
         melhor = { s, fonte: { destino: h.destino, nome: h.nome, tipo: dominante(h.tipos).valor, categoria: dominante(h.categorias).valor }, rotulo: h.nome };
       }
     }
@@ -285,15 +290,30 @@ export function criarClassificador({ regras = [], despesas = [], receitas = [], 
     return lanc;
   }
 
+  // Mesmo valor e mesma data; para valores a partir de R$ 50, até 20 dias de diferença
+  // (ex.: conta fixa lançada com o vencimento e paga dias antes)
+  const usados = new Set();
+  const diasEntre = (a, b) => Math.abs(new Date(a.ano, a.mes - 1, a.dia) - new Date(b.ano, b.mes - 1, b.dia)) / 864e5;
   function marcarDuplicados(lancamentos) {
-    const restantes = new Map(legado);
     for (const l of lancamentos) {
-      if (l.jaLancado || l.destino !== 'DESPESA') continue;
-      const k = `${l.tx.data.ano}-${l.tx.data.mes}-${l.tx.data.dia}|${l.tx.valor}`;
-      const n = restantes.get(k);
-      if (n) {
+      if (l.jaLancado || l.destino !== 'DESPESA' || l.valor < 0) continue;
+      let melhor = null;
+      for (const d of legado) {
+        if (usados.has(d) || Math.abs(d.valor - l.tx.valor) > 0.009) continue;
+        if (l.forma === 'CRÉDITO PARCELADO' && (d.parcelas || '1/1') !== l.parcelas) continue; // parcela 2/10 não é duplicata da 1/10
+        const dias = diasEntre(d.data, l.tx.data);
+        const mesmoMes = d.mesRef === l.mesRef;
+        if (dias === 0 || (l.tx.valor >= 50 && mesmoMes && dias <= 31)) {
+          const nota = (mesmoMes ? 0 : 100) + dias;
+          if (!melhor || nota < melhor.nota) melhor = { d, nota };
+        }
+      }
+      if (melhor) {
+        usados.add(melhor.d);
         l.possivelDuplicado = true;
-        restantes.set(k, n - 1);
+        l.duplicadoDe = melhor.d;
+        const pendente = rotulo(melhor.d.status) === 'A PAGAR';
+        l.motivo = `Já está na planilha como “${melhor.d.nome}” (${melhor.d.vencimento})${pendente ? ' — vai ser marcado como PAGO' : ''}`;
       }
     }
   }

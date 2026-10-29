@@ -146,8 +146,18 @@ if (pasta) {
   });
   teste('Linhas para planilha', () => {
     const { despesas: dl, receitas: rl } = paraLinhasPlanilha([...lc, ...ld]);
-    assert.ok(dl.every((d) => d.MES_DE_REFERENCIA === '09/2026' && d.ID_IMPORTACAO));
+    assert.ok(dl.every((d) => d.ID_IMPORTACAO));
     assert.equal(rl.length, 1);
+  });
+  teste('Cartão segue o ciclo da fatura (fecha dia 7); conta segue o calendário', () => {
+    assert.equal(por(lc, 'Netflix').mesRef, '2026-08'); // compra em 03/09 -> fatura de agosto
+    assert.equal(por(lc, 'Mercadolivre').mesRef, '2026-09'); // 12/09 -> setembro
+    assert.equal(por(ld, 'Compra no débito').mesRef, '2026-09'); // débito em 05/09 -> setembro
+  });
+  teste('Parcela seguinte com mesmo valor não é duplicata', () => {
+    const l = criarClassificador({ despesas, receitas }).classificarExtrato(lerExtrato('date,title,amount\n2026-09-07,LIVELO - NuPay - Parcela 2/10,"299,48"', 'f.csv'))[0];
+    assert.equal(l.possivelDuplicado, false);
+    assert.equal(l.nome, 'LIVELO - Pneus - Parcela 2/10');
   });
 
   console.log('contas fixas (outubro/2026)');

@@ -36,10 +36,22 @@ export function montarFixas({ despesas, receitas, mesAlvo, instituicaoCartao = '
   const limite = somarMeses(mesAlvo, -MESES_SEM_APARECER);
 
   // ── Despesas fixas ──
+  // Além das marcadas FIXO, entram as recorrentes pagas fora do cartão/conta importados
+  // (ex.: financiamento debitado em outro banco), que não aparecem em nenhum extrato.
+  const recorrentes = new Map();
+  for (const d of despesas) {
+    if (rotulo(d.categoria) === 'FIXO' || !d.mesRef || d.mesRef >= mesAlvo || d.mesRef < somarMeses(mesAlvo, -4)) continue;
+    if (rotulo(d.forma).startsWith('CREDITO') || rotulo(d.instituicao) === rotulo(instituicaoCartao)) continue;
+    const s = serieDe(d.nome);
+    if (!recorrentes.has(s)) recorrentes.set(s, new Set());
+    recorrentes.get(s).add(d.mesRef);
+  }
+  const ehFixa = (d) => rotulo(d.categoria) === 'FIXO' || (recorrentes.get(serieDe(d.nome))?.size || 0) >= 3;
+
   const ultimas = new Map();
   const noMesAlvo = new Map();
   for (const d of despesas) {
-    if (rotulo(d.categoria) !== 'FIXO' || !d.mesRef) continue;
+    if (!ehFixa(d) || !d.mesRef) continue;
     const serie = serieDe(d.nome);
     if (d.mesRef === mesAlvo) {
       noMesAlvo.set(serie, d);
@@ -63,6 +75,7 @@ export function montarFixas({ despesas, receitas, mesAlvo, instituicaoCartao = '
       serie,
       nome: d.nome.replace(/Parcela\s+\d+\s*\/\s*\d+/i, `Parcela ${parcelas}`),
       tipo: d.tipo,
+      categoria: d.categoria || 'FIXO',
       forma: d.forma,
       instituicao: d.instituicao.trim(),
       valorAnterior: Math.abs(d.valor),
@@ -133,7 +146,7 @@ export function fixasParaLinhas(fixas, mesAlvo) {
       NOME_DESPESA: f.nome,
       VENCIMENTO: f.vencimento,
       VALOR: arred(parseValor(f.valor)),
-      CATEGORIA: 'FIXO',
+      CATEGORIA: f.categoria || 'FIXO',
       STATUS: f.status,
       FORMA_DE_PGTO: f.forma,
       PARCELAS: f.parcelas,

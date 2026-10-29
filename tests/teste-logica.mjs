@@ -175,7 +175,13 @@ if (pasta) {
     assert.ok(fixas.viaCartao.includes('Netflix.Com') && !fixas.despesas.some((f) => f.nome === 'Netflix.Com')));
   teste('Linhas de fixas', () => {
     const l = fixasParaLinhas(fixas, '2026-10');
-    assert.ok(l.despesas.every((d) => d.CATEGORIA === 'FIXO' && d.MES_DE_REFERENCIA === '10/2026'));
+    assert.ok(l.despesas.every((d) => d.MES_DE_REFERENCIA === '10/2026'));
+    assert.equal(l.despesas.find((d) => d.NOME_DESPESA === 'Condomínio').CATEGORIA, 'FIXO');
+  });
+  teste('Recorrente pago fora do Nubank entra no checklist mantendo a categoria', () => {
+    const f = fixas.despesas.find((x) => x.nome.startsWith('Financiamento Apartamento'));
+    assert.equal(f.categoria, 'VARIÁVEL');
+    assert.ok(!fixas.despesas.some((x) => x.nome === 'Luz')); // Luz é paga pelo Nubank: vem no extrato
   });
 }
 console.log(`\n${ok} testes passaram${process.exitCode ? ' — HÁ FALHAS' : ''}`);

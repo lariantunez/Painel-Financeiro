@@ -348,6 +348,16 @@ function linhaReceitaFixa(x, i) {
 
 // As seções são definidas ao entrar no passo, para as linhas não "pularem" enquanto você edita
 function congelarSecoes() {
+  // Conta fixa do checklist paga no mesmo mês do extrato: o lançamento do extrato é a mesma conta
+  const doChecklist = (imp.fixas?.despesas || []).filter((f) => f.incluir && !f.jaLancado);
+  for (const l of imp.lancamentos) {
+    if (l.destino !== 'DESPESA' || l.jaLancado || l.possivelDuplicado || l.mesRef !== imp.mesFixas) continue;
+    const f = doChecklist.find((x) => Math.abs(parseValor(x.valor) - l.valor) < 0.01);
+    if (f) {
+      doChecklist.splice(doChecklist.indexOf(f), 1);
+      Object.assign(l, { possivelDuplicado: true, excluir: true, motivo: `Mesma conta fixa “${f.nome}” do passo anterior` });
+    }
+  }
   for (const l of imp.lancamentos) {
     if (l.jaLancado) l.secao = 'lancado';
     else if (l.possivelDuplicado) l.secao = 'duplicado';

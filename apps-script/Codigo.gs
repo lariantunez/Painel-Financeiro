@@ -26,7 +26,7 @@ function configurar() {
   const props = PropertiesService.getScriptProperties();
   let token = props.getProperty('TOKEN');
   if (!token) {
-    token = Utilities.getUuid().replace(/-/g, '');
+    token = typeof TOKEN_INSTALACAO !== 'undefined' ? TOKEN_INSTALACAO : Utilities.getUuid().replace(/-/g, '');
     props.setProperty('TOKEN', token);
   }
   prepararAbas_();
@@ -67,6 +67,7 @@ function doPost(e) {
         case 'regras': return salvarRegras_(corpo.regras || [], corpo.excluir || []);
         case 'status': return atualizarStatus_(corpo.alteracoes || []);
         case 'desfazer': return desfazer_(corpo.lote);
+        case 'renomearOpcao': return renomearOpcao_(corpo.aba, corpo.coluna, corpo.de, corpo.para);
         default: throw new Error('Ação desconhecida: ' + corpo.acao);
       }
     } finally {
@@ -158,6 +159,7 @@ function anexar_(aba, linhas) {
 
   const inicio = ultima + 1;
   const destino = aba.getRange(inicio, 1, valores.length, cab.length);
+  garantirOpcoes_(aba, ultima, cab.length, valores);
   if (ultima > 1) {
     const linhaRef = aba.getRange(ultima, 1, 1, cab.length);
     linhaRef.copyFormatToRange(aba, 1, cab.length, inicio, inicio + valores.length - 1);
@@ -229,6 +231,17 @@ function atualizarStatus_(alteracoes) {
   let feitas = 0;
   const erros = [];
   alteracoes.forEach((a) => {
+    try {
+      feitas += alterarLinha_(ss, a, erros);
+    } catch (err) {
+      erros.push('Linha ' + a.linha + ': ' + err.message);
+    }
+  });
+  return { alteradas: feitas, erros: erros };
+}
+
+function alterarLinha_(ss, a, erros) {
+  {
     const aba = ss.getSheetByName(a.aba === 'receitas' ? ABAS.RECEITAS : ABAS.DESPESAS);
     const cab = aba.getRange(1, 1, 1, aba.getLastColumn()).getValues()[0].map(normalizar_);
     const iNome = cab.indexOf(a.aba === 'receitas' ? 'TIPO' : 'NOME_DESPESA');
@@ -236,17 +249,61 @@ function atualizarStatus_(alteracoes) {
     const nomeAtual = aba.getRange(linha, iNome + 1).getDisplayValue();
     if (String(nomeAtual).trim() !== String(a.nome).trim()) {
       erros.push('Linha ' + linha + ' mudou na planilha ("' + nomeAtual + '"). Atualize o painel e tente de novo.');
-      return;
+      return 0;
     }
     Object.keys(a.campos || {}).forEach((campo) => {
       const j = cab.indexOf(campo);
       if (j < 0) return;
       const celula = aba.getRange(linha, j + 1);
-      celula.setValue(converter_(campo, a.campos[campo], celula.getValue()));
+      const valor = converter_(campo, a.campos[campo], celula.getValue());
+      garantirOpcoes_(aba, linha, cab.length, [cab.map((c, k) => (k === j ? valor : ''))]);
+      celula.setValue(valor);
     });
-    feitas++;
+    return 1;
+  }
+}
+
+// Listas suspensas: inclui valores novos (ex.: tipo criado no painel) para a planilha não recusar a gravação
+function garantirOpcoes_(aba, linhaRef, nColunas, valores) {
+  if (linhaRef < 2) return;
+  const regras = aba.getRange(linhaRef, 1, 1, nColunas).getDataValidations()[0];
+  regras.forEach((regra, j) => {
+    if (!regra || regra.getCriteriaType() !== SpreadsheetApp.DataValidationCriteria.VALUE_IN_LIST) return;
+    const [lista, mostrarLista] = regra.getCriteriaValues();
+    const novos = valores
+      .map((l) => (typeof l[j] === 'string' ? l[j].replace(/^'/, '') : ''))
+      .filter((v, i, todos) => v && lista.indexOf(v) < 0 && todos.indexOf(v) === i);
+    if (!novos.length) return;
+    const nova = regra.copy().requireValueInList(lista.concat(novos), mostrarLista).build();
+    aba.getRange(2, j + 1, aba.getMaxRows() - 1, 1).setDataValidation(nova);
   });
-  return { alteradas: feitas, erros: erros };
+}
+
+// Corrige uma opção da lista suspensa (ex.: erro de digitação) e todas as células que a usam
+function renomearOpcao_(nomeAba, coluna, de, para) {
+  const aba = SpreadsheetApp.getActive().getSheetByName(nomeAba === 'receitas' ? ABAS.RECEITAS : ABAS.DESPESAS);
+  const cab = aba.getRange(1, 1, 1, aba.getLastColumn()).getValues()[0].map(normalizar_);
+  const j = cab.indexOf(coluna);
+  if (j < 0) throw new Error('Coluna não encontrada: ' + coluna);
+  const n = aba.getMaxRows() - 1;
+  const faixa = aba.getRange(2, j + 1, n, 1);
+  const regra = aba.getRange(2, j + 1).getDataValidation();
+  if (regra && regra.getCriteriaType() === SpreadsheetApp.DataValidationCriteria.VALUE_IN_LIST) {
+    const [lista, mostrar] = regra.getCriteriaValues();
+    const nova = lista.map((v) => (v === de ? para : v)).filter((v, i, t) => t.indexOf(v) === i);
+    if (nova.indexOf(para) < 0) nova.push(para);
+    faixa.setDataValidation(regra.copy().requireValueInList(nova, mostrar).build());
+  }
+  const valores = aba.getRange(2, j + 1, aba.getLastRow() - 1, 1).getValues();
+  let trocadas = 0;
+  valores.forEach((l) => {
+    if (l[0] === de) {
+      l[0] = para;
+      trocadas++;
+    }
+  });
+  if (trocadas) aba.getRange(2, j + 1, valores.length, 1).setValues(valores);
+  return { trocadas: trocadas };
 }
 
 function desfazer_(lote) {

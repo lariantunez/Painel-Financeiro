@@ -284,7 +284,11 @@ export function renderPainel(raiz, app) {
   });
 
   // Evolução
-  const serie = serieMeses(dados, mes, 12, filtros);
+  // Janela fixa: últimos 12 meses até o mês atual (clicar numa barra só a seleciona, nada muda de lugar).
+  // Só se move quando o período escolhido tem mês fora dessa janela.
+  let fimGrafico = mesAtual();
+  if (meses.some((m) => m > fimGrafico || m < somarMeses(fimGrafico, -11))) fimGrafico = mes;
+  const serie = serieMeses(dados, fimGrafico, 12, filtros);
   responsivo($('#g-evolucao', raiz), () =>
     graficoColunas($('#g-evolucao', raiz), {
       rotulos: serie.map((s) => MESES[+s.mes.slice(5) - 1] + (s.mes.endsWith('-01') ? ` ${s.mes.slice(2, 4)}` : '')),

@@ -485,8 +485,8 @@ function linhaRevisao(l, i, ctx) {
       <select class="select select-sm" data-c="categoria" ${dis} aria-label="Categoria (valor fixo ou variável)">${opcoes(CATEGORIAS, l.categoria)}</select>
       <select class="select select-sm" data-c="recorrencia" ${dis} aria-label="Recorrência"><option value="EVENTUAL" ${l.recorrencia !== 'MENSAL' ? 'selected' : ''}>Eventual</option><option value="MENSAL" ${l.recorrencia === 'MENSAL' ? 'selected' : ''}>Mensal</option></select>`;
   } else if (l.destino === 'RECEITA') {
-    campos = `<input class="input input-sm ${l.tipo ? '' : 'falta'}" data-c="tipo" list="dl-receitas" placeholder="Descrição da receita" value="${escapeHtml(l.tipo)}" ${dis} aria-label="Descrição da receita">
-      <select class="select select-sm ${l.titular ? '' : 'falta'}" data-c="titular" ${dis} aria-label="Quem recebeu">${opcoes(ctx.titulares, l.titular, 'Quem recebeu…')}</select><span></span>`;
+    // na receita, o "nome no painel" é a descrição (coluna TIPO da aba Receitas)
+    campos = `<select class="select select-sm ${l.titular ? '' : 'falta'}" data-c="titular" ${dis} aria-label="Quem recebeu">${opcoes(ctx.titulares, l.titular, 'Quem recebeu…')}</select><span></span><span></span>`;
   } else {
     campos = '<span class="muted small" style="grid-column:span 3">não vai para a planilha</span>';
   }
@@ -495,8 +495,12 @@ function linhaRevisao(l, i, ctx) {
   return `<div class="revisao-item ${ignorado ? 'ignorado' : ''} ${l.secao === 'atencao' ? 'pendente' : ''}" data-rev="${i}">
     <div class="num small r-data">${l.secao === 'atencao' && !travado ? `<input type="checkbox" data-sel="${i}" ${imp.selecionados.has(i) ? 'checked' : ''} aria-label="Selecionar"> ` : ''}${l.vencimento.slice(0, 5)}<div class="muted">${l.origem === 'cartao' ? 'cartão' : 'conta'}</div></div>
     <div class="desc">
-      <input class="input input-sm" data-c="nome" value="${escapeHtml(l.nome)}" ${travado || l.destino !== 'DESPESA' ? 'disabled' : ''} aria-label="Nome">
-      <div class="orig" title="${escapeHtml(l.descricaoOriginal)}">${escapeHtml(l.descricaoOriginal)}</div>
+      <div class="no-banco" title="${escapeHtml(l.descricaoOriginal)}"><span class="rot">No banco</span><span class="txt">${escapeHtml(l.descricaoOriginal)}</span></div>
+      <label class="nome-painel"><span class="rot">Nome no painel</span>${
+        l.destino === 'RECEITA'
+          ? `<input class="input input-sm ${l.tipo ? '' : 'falta'}" data-c="tipo" list="dl-receitas" placeholder="Ex.: Salário, Reembolso…" value="${escapeHtml(l.tipo)}" ${dis}>`
+          : `<input class="input input-sm" data-c="nome" value="${escapeHtml(l.nome)}" ${travado || l.destino !== 'DESPESA' ? 'disabled' : ''}>`
+      }</label>
       <div class="motivo">${escapeHtml(l.forma)}${parcela} · ${escapeHtml(l.motivo)}
         ${podePerguntar ? `· <label><input type="checkbox" data-c="perguntar" ${l.perguntar ? 'checked' : ''}> perguntar sempre</label>` : ''}
         ${l.secao === 'duplicado' ? `· <label><input type="checkbox" data-c="incluir" ${l.excluir ? '' : 'checked'}> Incluir</label>` : ''}</div>

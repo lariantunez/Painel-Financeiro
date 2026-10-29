@@ -461,8 +461,11 @@ table.tabela { width: 100%; border-collapse: collapse; font-size: 13px; }
 }
 .revisao-item:first-child { border-top: 0; }
 .revisao-item .desc { min-width: 0; }
-.revisao-item .desc .input { margin-bottom: 3px; }
-.revisao-item .orig { font-size: 11px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.revisao-item .rot { font-size: 10px; font-weight: 600; letter-spacing: 0.03em; text-transform: uppercase; color: var(--muted); white-space: nowrap; }
+.revisao-item .no-banco { display: flex; gap: 8px; align-items: baseline; font-size: 12px; color: var(--text-2); margin-bottom: 4px; min-width: 0; }
+.revisao-item .no-banco .txt { overflow: hidden; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow-wrap: anywhere; font-family: ui-monospace, 'Cascadia Code', Consolas, monospace; font-size: 11px; line-height: 1.4; }
+@media (max-width: 640px) { .revisao-item .no-banco .txt { -webkit-line-clamp: 3; line-clamp: 3; } }
+.revisao-item .nome-painel { display: grid; gap: 2px; margin-bottom: 3px; }
 .revisao-item .motivo { font-size: 11px; color: var(--muted); }
 .revisao-item.ignorado .desc, .revisao-item.ignorado .num { opacity: 0.45; text-decoration: line-through; }
 .revisao-item .falta { border-color: var(--warning); background: var(--warning-soft); }

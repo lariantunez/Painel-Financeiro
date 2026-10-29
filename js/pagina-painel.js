@@ -451,13 +451,23 @@ function renderTabela(el, t) {
   }
 }
 
-// Status: um clique alterna entre "Pago" e "A pagar" e grava na planilha
+// Status: lista de seleção (Pago / A pagar) que grava na planilha ao escolher
+function seletorStatus(d) {
+  const atual = rotulo(d.status);
+  const opcoes = [['PAGO', 'Pago'], ['A PAGAR', 'A pagar']];
+  if (atual && !opcoes.some(([v]) => v === atual)) opcoes.push([atual, d.status]);
+  const classe = atual === 'PAGO' ? 'pago' : atual === 'A PAGAR' ? 'a-pagar' : '';
+  return `<select class="status-sel ${classe}" data-status-linha="${d._linha}" aria-label="Status de ${escapeHtml(d.nome)}">
+    ${atual ? '' : '<option value="" selected>—</option>'}${opcoes.map(([v, r]) => `<option value="${escapeHtml(v)}" ${v === atual ? 'selected' : ''}>${escapeHtml(r)}</option>`).join('')}</select>`;
+}
+
 function ligarStatus(el, t, linhas) {
-  for (const b of $$('[data-status-linha]', el)) {
-    b.addEventListener('click', async () => {
-      const d = linhas.find((x) => x._linha === +b.dataset.statusLinha);
-      const novo = rotulo(d.status) === 'PAGO' ? 'A PAGAR' : 'PAGO';
-      b.disabled = true;
+  for (const s of $$('[data-status-linha]', el)) {
+    s.addEventListener('change', async () => {
+      const d = linhas.find((x) => x._linha === +s.dataset.statusLinha);
+      const novo = s.value;
+      if (!novo || novo === rotulo(d.status)) return;
+      s.disabled = true;
       try {
         const r = await enviar('status', { alteracoes: [{ aba: 'despesas', linha: d._linha, nome: d.nome, campos: { STATUS: novo } }] });
         if (r.erros?.length) throw new Error(r.erros[0]);
@@ -466,7 +476,8 @@ function ligarStatus(el, t, linhas) {
         ctxTabela.app.renderizar(); // atualiza também "Contas a pagar"
       } catch (err) {
         toast(err.message, 'erro', 6000);
-        b.disabled = false;
+        s.value = rotulo(d.status);
+        s.disabled = false;
       }
     });
   }
@@ -476,7 +487,7 @@ function linhaDespesa(d, editavel) {
   const desc = d.descOriginal && d.descOriginal !== d.nome ? `<span class="desc-original">${escapeHtml(d.descOriginal)}</span>` : '';
   return `<tr><td class="tab">${escapeHtml(d.vencimento)}</td><td>${escapeHtml(d.nome)}${rotulo(d.categoria) === 'FIXO' ? ' <span class="badge">fixo</span>' : ''}${desc}</td>
     <td>${escapeHtml(tipoDe(d))}</td><td class="text-2 opc">${escapeHtml(d.forma)}</td><td class="tab opc">${escapeHtml(d.parcelas && d.parcelas !== '1/1' ? d.parcelas : '')}</td>
-    <td class="opc">${editavel ? `<button class="status-btn" data-status-linha="${d._linha}" title="Clique para marcar como ${rotulo(d.status) === 'PAGO' ? 'a pagar' : 'pago'}">${statusBadge(d.status)}</button>` : statusBadge(d.status)}</td><td class="num">${moeda(d.valor)}</td>
+    <td class="opc">${editavel ? seletorStatus(d) : statusBadge(d.status)}</td><td class="num">${moeda(d.valor)}</td>
     ${editavel ? `<td class="acao-linha"><button class="btn btn-ghost btn-icone btn-sm" data-editar="${d._linha}" aria-label="Editar ${escapeHtml(d.nome)}" title="Renomear / mudar tipo">✎</button></td>` : ''}</tr>`;
 }
 

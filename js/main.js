@@ -15,7 +15,7 @@ const PAGINAS = { painel: renderPainel, previsao: renderPrevisao, importar: rend
 const estado = {
   dados: null,
   meses: [mesAtual()], // período selecionado no painel (um ou vários meses)
-  filtroTipo: null,
+  filtros: {}, // filtros da página: { tipo|despesa|categoria|recorrencia|forma|status: { valor, texto } }
   rota: 'painel',
   carregando: false,
   erro: null,
@@ -36,8 +36,19 @@ const app = {
     if (!estado.meses.length) estado.meses = [mesAtual()];
     renderizar();
   },
-  filtrarTipo(tipo) {
-    estado.filtroTipo = tipo;
+  // Clicar num dado filtra a página; clicar de novo no mesmo dado tira o filtro
+  alternarFiltro(campo, valor, texto = valor) {
+    if (estado.filtros[campo]?.valor === valor) delete estado.filtros[campo];
+    else estado.filtros[campo] = { valor, texto };
+    renderizar();
+  },
+  tirarFiltro(campo) {
+    delete estado.filtros[campo];
+    renderizar();
+  },
+  limparFiltros() {
+    estado.filtros = {};
+    estado.meses = [mesAtual()];
     renderizar();
   },
 };

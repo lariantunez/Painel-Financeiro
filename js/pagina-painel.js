@@ -1,7 +1,8 @@
 // Tela principal: visão do mês.
 
 import { moeda, pct, nomeMes, somarMeses, MESES, MESES_LONGOS, escapeHtml, rotulo, mesAtual, RX_PARCELA, parseValor, arred, rotuloPeriodo } from './util.js';
-import { totaisMes, serieMeses, porTipo, fixoVariavel, contasAPagar, parcelamentos, maioresGastos, qualidade, tipoDe, mesmaDespesa, lancamentosSeguintes, nomeDaParcela, periodoAnterior } from './analise.js';
+import { totaisMes, serieMeses, porTipo, fixoVariavel, contasAPagar, parcelamentos, maioresGastos, qualidade, tipoDe, mesmaDespesa, lancamentosSeguintes, nomeDaParcela, periodoAnterior, FILTROS, filtrarDespesas } from './analise.js';
+import { serieDe } from './fixas.js';
 import { graficoColunas, responsivo, legenda, linhaTooltip, mostrarTooltip, esconderTooltip, toast, $, $$, cabecalho, ordenar, ligarOrdenacao, dataOrdenavel } from './ui.js';
 import { backendConfigurado, enviar } from './api.js';
 import { valoresUsados, regraParaLinha } from './model.js';
@@ -66,8 +67,18 @@ const ordem = structuredClone(ORDEM_PADRAO);
 // (o período também conta: clicar numa barra do gráfico de 12 meses filtra a página inteira)
 let comparacao = 'vs mês anterior'; // texto das variações nos cartões
 let periodo = 'mês'; // "mês" ou "período", nos textos
-function temFiltro({ filtroTipo, meses }) {
-  return Boolean(filtroTipo || meses.length !== 1 || meses[0] !== mesAtual() || busca.trim() || Object.keys(ORDEM_PADRAO).some((k) => ordem[k].col !== ORDEM_PADRAO[k].col || ordem[k].dir !== ORDEM_PADRAO[k].dir));
+let filtrosAtuais = {};
+
+// Atributos que tornam um dado clicável como filtro (clicar de novo no mesmo dado tira o filtro)
+function filtravel(campo, valor, texto = valor) {
+  const ativo = filtrosAtuais[campo]?.valor === valor;
+  return `data-filtro="${campo}" data-valor="${escapeHtml(valor)}" data-texto="${escapeHtml(texto)}" title="${ativo ? 'Clique para tirar o filtro' : 'Clique para filtrar a página'}"`;
+}
+const ativoNoFiltro = (campo, valor) => filtrosAtuais[campo]?.valor === valor;
+const apagadoNoFiltro = (campo, valor) => Boolean(filtrosAtuais[campo]) && filtrosAtuais[campo].valor !== valor;
+
+function temFiltro({ filtros, meses }) {
+  return Boolean(Object.keys(filtros).length || meses.length !== 1 || meses[0] !== mesAtual() || busca.trim() || Object.keys(ORDEM_PADRAO).some((k) => ordem[k].col !== ORDEM_PADRAO[k].col || ordem[k].dir !== ORDEM_PADRAO[k].dir));
 }
 
 // ───────────── Seletor de período (vários meses) ─────────────
@@ -164,7 +175,9 @@ function atualizarBotaoLimpar(estado) {
 }
 
 export function renderPainel(raiz, app) {
-  const { dados, meses, filtroTipo } = app.estado;
+  const { dados, meses, filtros } = app.estado;
+  filtrosAtuais = filtros;
+  const filtrado = Object.keys(filtros).length > 0;
   if (!dados) {
     raiz.innerHTML = '<div class="vazio">Carregando dados…</div>';
     return;
@@ -175,10 +188,13 @@ export function renderPainel(raiz, app) {
   const varios = meses.length > 1;
   comparacao = varios ? 'vs período anterior' : 'vs mês anterior';
   periodo = varios ? 'período' : 'mês';
-  const t = totaisMes(dados, meses, filtroTipo);
-  const ant = totaisMes(dados, periodoAnterior(meses), filtroTipo);
+  const t = totaisMes(dados, meses, filtros);
+  const ant = totaisMes(dados, periodoAnterior(meses), filtros);
+  // saldo e poupança são do orçamento inteiro: não faz sentido "receitas − só uma parte das despesas"
+  const geral = filtrado ? totaisMes(dados, meses) : t;
+  const geralAnt = filtrado ? totaisMes(dados, periodoAnterior(meses)) : ant;
   const problemas = qualidade(dados);
-  const aPagar = contasAPagar(dados, mes);
+  const aPagar = filtrarDespesas(contasAPagar(dados, mes), filtros, ['status']);
 
   const semTipo = problemas.find((p) => p.semTipo)?.semTipo || [];
   raiz.innerHTML = `
@@ -187,7 +203,9 @@ export function renderPainel(raiz, app) {
     <div class="cabecalho-pagina">
       ${seletorPeriodo(meses, dados)}
       <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-        ${filtroTipo ? `<button class="filtro-chip" id="limpar-filtro">Tipo: ${escapeHtml(filtroTipo)} <span aria-hidden="true">×</span></button>` : ''}
+        ${Object.entries(filtros)
+          .map(([k, f]) => `<button class="filtro-chip" data-tirar="${k}" title="Tirar este filtro">${FILTROS[k].rotulo}: ${escapeHtml(f.texto)} <span aria-hidden="true">×</span></button>`)
+          .join('')}
         <button class="btn btn-sm" id="limpar-filtros" ${temFiltro(app.estado) ? '' : 'disabled'} title="Volta para o mês atual e limpa o tipo, a busca e a ordenação das tabelas">✕ Limpar filtros</button>
       </div>
     </div>
@@ -195,15 +213,15 @@ export function renderPainel(raiz, app) {
     <section class="kpis">
       ${kpi('Receitas', COR_R, t.receita, ant.receita, `${t.qtdReceitas} lançamento(s)`, true)}
       ${kpi('Despesas', COR_D, t.despesa, ant.despesa, `${t.qtdDespesas} lançamento(s)`, false)}
-      ${kpiSaldo(t)}
-      ${kpiPoupanca(t, ant)}
+      ${kpiSaldo(geral, filtrado)}
+      ${kpiPoupanca(geral, geralAnt, filtrado)}
     </section>
 
     <section class="grade">
       <div class="card c-12">
         <div class="card-titulo">
           <h2>Últimos 12 meses</h2>
-          ${legenda([[COR_R, 'Receitas'], [COR_D, filtroTipo ? `Despesas · ${filtroTipo}` : 'Despesas']])}
+          ${legenda([[COR_R, 'Receitas'], [COR_D, filtrado ? 'Despesas (filtradas)' : 'Despesas']])}
         </div>
         <div id="g-evolucao"></div>
       </div>
@@ -219,7 +237,7 @@ export function renderPainel(raiz, app) {
       </div>
       <div class="c-5" style="display:grid;gap:12px;align-content:start">
         <div class="card">
-          <div class="card-titulo"><h2>Contas a pagar</h2><span class="sub">${aPagar.length ? moeda(aPagar.reduce((s, d) => s + d.valor, 0)) : ''}</span></div>
+          <div class="card-titulo"><h2 class="filtravel ${ativoNoFiltro('status', 'A PAGAR') ? 'filtro-ativo' : ''}" ${filtravel('status', 'A PAGAR', 'A pagar')}>Contas a pagar</h2><span class="sub">${aPagar.length ? moeda(aPagar.reduce((s, d) => s + d.valor, 0)) : ''}</span></div>
           <div id="a-pagar"></div>
         </div>
         <div class="card" id="composicao"></div>
@@ -247,16 +265,26 @@ export function renderPainel(raiz, app) {
   ligarSemTipo(raiz, semTipo, app);
 
   ligarSeletorPeriodo(raiz, app);
-  $('#limpar-filtro', raiz)?.addEventListener('click', () => app.filtrarTipo(null));
+  for (const b of $$('[data-tirar]', raiz)) b.addEventListener('click', () => app.tirarFiltro(b.dataset.tirar));
+  // Um único ouvinte: qualquer dado com data-filtro filtra a página (e desfaz ao clicar de novo)
+  if (!raiz._filtrosLigados) {
+    raiz._filtrosLigados = true;
+    raiz.addEventListener('click', (e) => {
+      const alvo = e.target.closest('[data-filtro]');
+      if (!alvo || !raiz.contains(alvo) || app.estado.rota !== 'painel') return;
+      e.preventDefault();
+      esconderTooltip();
+      app.alternarFiltro(alvo.dataset.filtro, alvo.dataset.valor, alvo.dataset.texto);
+    });
+  }
   $('#limpar-filtros', raiz).addEventListener('click', () => {
     busca = '';
     Object.assign(ordem, structuredClone(ORDEM_PADRAO));
-    app.estado.meses = [mesAtual()];
-    app.filtrarTipo(null); // redesenha a página inteira
+    app.limparFiltros(); // redesenha a página inteira
   });
 
   // Evolução
-  const serie = serieMeses(dados, mes, 12, filtroTipo);
+  const serie = serieMeses(dados, mes, 12, filtros);
   responsivo($('#g-evolucao', raiz), () =>
     graficoColunas($('#g-evolucao', raiz), {
       rotulos: serie.map((s) => MESES[+s.mes.slice(5) - 1] + (s.mes.endsWith('-01') ? ` ${s.mes.slice(2, 4)}` : '')),
@@ -268,19 +296,20 @@ export function renderPainel(raiz, app) {
       onClick: (i, e) => {
         const m = serie[i].mes;
         if (e.ctrlKey || e.metaKey) app.definirMeses(meses.includes(m) ? meses.filter((x) => x !== m) : [...meses, m]);
+        else if (meses.length === 1 && meses[0] === m) app.irParaMes(mesAtual()); // clicar de novo tira o filtro
         else app.irParaMes(m);
       },
       tooltip: (i) => {
         const s = serie[i];
-        return `<div class="t-titulo">${nomeMes(s.mes)}</div>${linhaTooltip(COR_R, 'Receitas', moeda(s.receita))}${linhaTooltip(COR_D, 'Despesas', moeda(s.despesa))}<div class="t-sep"></div>${linhaTooltip('', 'Saldo', `<span class="${s.saldo >= 0 ? 'pos' : 'neg'}">${s.saldo >= 0 ? '+' : ''}${moeda(s.saldo)}</span>`)}<div class="t-sep"></div><div class="small muted">Clique: ver este mês · Ctrl+clique: somar ao período</div>`;
+        return `<div class="t-titulo">${nomeMes(s.mes)}</div>${linhaTooltip(COR_R, 'Receitas', moeda(s.receita))}${linhaTooltip(COR_D, 'Despesas', moeda(s.despesa))}<div class="t-sep"></div>${linhaTooltip('', 'Saldo', `<span class="${s.saldo >= 0 ? 'pos' : 'neg'}">${s.saldo >= 0 ? '+' : ''}${moeda(s.saldo)}</span>`)}<div class="t-sep"></div><div class="small muted">Clique: ver este mês (de novo: volta ao atual) · Ctrl+clique: somar ao período</div>`;
       },
     })
   );
 
-  renderPorTipo($('#por-tipo', raiz), dados, meses, filtroTipo, app);
+  renderPorTipo($('#por-tipo', raiz), dados, meses, filtros);
   renderAPagar($('#a-pagar', raiz), aPagar, mes, app);
-  renderComposicao($('#composicao', raiz), totaisMes(dados, meses).despesas);
-  renderParcelamentos($('#parcelamentos', raiz), dados, mes);
+  renderComposicao($('#composicao', raiz), filtrarDespesas(totaisMes(dados, meses).despesas, filtros, ['categoria', 'recorrencia']));
+  renderParcelamentos($('#parcelamentos', raiz), filtrado ? { ...dados, despesas: filtrarDespesas(dados.despesas, filtros) } : dados, mes);
   renderMaiores($('#maiores', raiz), t.despesas);
   ctxTabela = { app, tipos: valoresUsados(dados.despesas, 'tipo').sort((a, b) => a.localeCompare(b, 'pt-BR')) };
   renderTabela($('#tabela', raiz), t);
@@ -393,19 +422,19 @@ function kpi(rotuloKpi, cor, valor, anterior, info, subirEhBom) {
   </div>`;
 }
 
-function kpiSaldo(t) {
+function kpiSaldo(t, filtrado) {
   if (!t.qtdReceitas && !t.qtdDespesas) {
     return `<div class="card kpi"><div class="rotulo">Saldo do ${periodo}</div><div class="valor muted">—</div><div class="delta">${periodo} ainda sem lançamentos</div></div>`;
   }
   const positivo = t.saldo >= 0;
   return `<div class="card kpi">
-    <div class="rotulo">Saldo do ${periodo}</div>
+    <div class="rotulo">Saldo do ${periodo}${filtrado ? ' <span class="badge">sem filtros</span>' : ''}</div>
     <div class="valor ${positivo ? 'pos' : 'neg'}">${positivo ? '' : '−'}${moeda(Math.abs(t.saldo))}</div>
     <div class="delta">${positivo ? '<span class="badge badge-good">✓ Sobrou dinheiro</span>' : '<span class="badge badge-crit">! Gastou mais que recebeu</span>'}</div>
   </div>`;
 }
 
-function kpiPoupanca(t, ant) {
+function kpiPoupanca(t, ant, filtrado) {
   const v = t.poupanca;
   const va = ant.poupanca;
   let comp = '<span class="muted">—</span>';
@@ -414,15 +443,15 @@ function kpiPoupanca(t, ant) {
     comp = `<b class="${dif >= 0 ? 'pos' : 'neg'}">${dif >= 0 ? '▲' : '▼'} ${Math.abs(dif).toFixed(0)} p.p.</b> ${comparacao}`;
   }
   return `<div class="card kpi">
-    <div class="rotulo">Taxa de poupança</div>
+    <div class="rotulo">Taxa de poupança${filtrado ? ' <span class="badge">sem filtros</span>' : ''}</div>
     <div class="valor">${v === null ? '—' : pct(v)}</div>
     <div class="delta">${comp}</div>
     <div class="delta">da receita que sobrou</div>
   </div>`;
 }
 
-function renderPorTipo(el, dados, mes, filtroTipo, app) {
-  const tipos = porTipo(dados, mes);
+function renderPorTipo(el, dados, mes, filtros) {
+  const tipos = porTipo(dados, mes, filtros);
   if (!tipos.length) {
     el.innerHTML = `<div class="vazio">Nenhuma despesa neste ${periodo}.</div>`;
     return;
@@ -432,7 +461,7 @@ function renderPorTipo(el, dados, mes, filtroTipo, app) {
     .map((t) => {
       const dif = t.media ? (t.valor - t.media) / t.media : null;
       const difTxt = dif === null ? 'novo' : `${dif >= 0 ? '+' : '−'}${pct(Math.abs(dif))}`;
-      return `<button class="barra-linha ${filtroTipo && filtroTipo !== t.tipo ? 'apagada' : ''}" data-tipo="${escapeHtml(t.tipo)}">
+      return `<button class="barra-linha ${apagadoNoFiltro('tipo', t.tipo) ? 'apagada' : ''}" data-tipo="${escapeHtml(t.tipo)}" ${filtravel('tipo', t.tipo)}>
         <span class="nome">${escapeHtml(t.tipo)}</span>
         <span class="barra-trilho">
           <span class="barra-fill" style="width:${(Math.max(0, t.valor) / max) * 100}%"></span>
@@ -444,9 +473,8 @@ function renderPorTipo(el, dados, mes, filtroTipo, app) {
     .join('')}</div>`;
   for (const b of $$('.barra-linha', el)) {
     const t = tipos.find((x) => x.tipo === b.dataset.tipo);
-    b.addEventListener('click', () => app.filtrarTipo(filtroTipo === t.tipo ? null : t.tipo));
     b.addEventListener('mousemove', (e) =>
-      mostrarTooltip(e, `<div class="t-titulo">${escapeHtml(t.tipo)}</div>${linhaTooltip(COR_D, 'Este mês', moeda(t.valor))}${linhaTooltip('', 'Média 6 meses', moeda(t.media))}<div class="t-sep"></div><div class="small muted">Clique para filtrar</div>`)
+      mostrarTooltip(e, `<div class="t-titulo">${escapeHtml(t.tipo)}</div>${linhaTooltip(COR_D, 'Este mês', moeda(t.valor))}${linhaTooltip('', 'Média 6 meses', moeda(t.media))}<div class="t-sep"></div><div class="small muted">${ativoNoFiltro('tipo', t.tipo) ? 'Clique para tirar o filtro' : 'Clique para filtrar'}</div>`)
     );
     b.addEventListener('mouseleave', esconderTooltip);
   }
@@ -497,15 +525,16 @@ function renderComposicao(el, despesas) {
     return;
   }
   const mensal = despesas.filter((d) => d.recorrencia === 'MENSAL').reduce((s, d) => s + d.valor, 0);
-  const divisao = (a, rotA, corA, b, rotB, dica) => `
-    <div class="split" title="${dica}"><div style="flex:${Math.max(a, 0)};background:${corA}"></div><div style="flex:${Math.max(b, 0)};background:var(--neutro)"></div></div>
-    <div class="legenda" style="justify-content:space-between;margin-bottom:12px">
-      <span><i class="swatch" style="background:${corA}"></i>${rotA} <b class="num">${moeda(a)}</b> <span class="muted">${pct(a / total)}</span></span>
-      <span><i class="swatch" style="background:var(--neutro)"></i>${rotB} <b class="num">${moeda(b)}</b> <span class="muted">${pct(b / total)}</span></span>
-    </div>`;
-  el.innerHTML = `<div class="card-titulo"><h2>Composição das despesas</h2></div>
-    ${divisao(mensal, 'Mensal', 'var(--receita)', total - mensal, 'Eventual', 'Mensal: contas pagas todo mês · Eventual: gastos ao longo do mês')}
-    ${divisao(fixo, 'Fixo', 'var(--receita)', variavel, 'Variável', 'Fixo: mesmo valor todo mês · Variável: valor muda ou lançamento único')}`;
+  // cada parte (barra ou legenda) é clicável: filtra a página por ela; clicar de novo tira
+  const divisao = (campo, a, valA, rotA, corA, b, valB, rotB) => {
+    const parte = (v, cor, flex) => `<div class="split-parte ${apagadoNoFiltro(campo, v) ? 'apagada' : ''}" style="flex:${Math.max(flex, 0)};background:${cor}" ${filtravel(campo, v, v === valA ? rotA : rotB)}></div>`;
+    const item = (v, cor, rot, valor) => `<button class="legenda-filtro ${ativoNoFiltro(campo, v) ? 'filtro-ativo' : ''} ${apagadoNoFiltro(campo, v) ? 'apagada' : ''}" ${filtravel(campo, v, rot)}><i class="swatch" style="background:${cor}"></i>${rot} <b class="num">${moeda(valor)}</b> <span class="muted">${pct(valor / total)}</span></button>`;
+    return `<div class="split">${parte(valA, corA, a)}${parte(valB, 'var(--neutro)', b)}</div>
+      <div class="legenda" style="justify-content:space-between;margin-bottom:12px">${item(valA, corA, rotA, a)}${item(valB, 'var(--neutro)', rotB, b)}</div>`;
+  };
+  el.innerHTML = `<div class="card-titulo"><h2>Composição das despesas</h2><span class="sub">clique para filtrar</span></div>
+    ${divisao('recorrencia', mensal, 'MENSAL', 'Mensal', 'var(--receita)', total - mensal, 'EVENTUAL', 'Eventual')}
+    ${divisao('categoria', fixo, 'FIXO', 'Fixo', 'var(--receita)', variavel, 'VARIAVEL', 'Variável')}`;
 }
 
 function renderParcelamentos(el, dados, mes) {
@@ -518,7 +547,7 @@ function renderParcelamentos(el, dados, mes) {
   const desenharParcelas = () => {
     const alvo = $('#tabela-parcelas', el);
     alvo.innerHTML = `<table class="tabela">${cabecalho(COLS_PARCELAS, ordem.parcelas)}<tbody>
-      ${ordenar(p.ativos, ordem.parcelas, VALOR_PARCELA).map((a) => `<tr><td>${escapeHtml(a.nome)}<span class="desc-original">${escapeHtml(a.tipo)}</span></td><td class="tab">${a.k}/${a.n}</td><td class="num">${moeda(a.valor)}</td><td class="num">${moeda(a.restante)}</td><td>${nomeMes(a.termina, false)}</td></tr>`).join('') || '<tr><td colspan="5" class="vazio">Nenhum parcelamento ativo.</td></tr>'}
+      ${ordenar(p.ativos, ordem.parcelas, VALOR_PARCELA).map((a) => `<tr><td><span class="filtravel ${ativoNoFiltro('despesa', serieDe(a.nome)) ? 'filtro-ativo' : ''}" ${filtravel('despesa', serieDe(a.nome), a.nome)}>${escapeHtml(a.nome)}</span><span class="desc-original">${escapeHtml(a.tipo)}</span></td><td class="tab">${a.k}/${a.n}</td><td class="num">${moeda(a.valor)}</td><td class="num">${moeda(a.restante)}</td><td>${nomeMes(a.termina, false)}</td></tr>`).join('') || '<tr><td colspan="5" class="vazio">Nenhum parcelamento ativo.</td></tr>'}
       </tbody></table>`;
     ligarOrdenacao(alvo, COLS_PARCELAS, ordem.parcelas, desenharParcelas);
     atualizarBotaoLimpar(ctxTabela?.app.estado);
@@ -543,7 +572,7 @@ function renderMaiores(el, despesas) {
   const lista = maioresGastos(despesas, 6);
   el.innerHTML = lista.length
     ? `<div class="lista">${lista
-        .map((d) => `<div class="lista-item"><div class="principal"><div>${escapeHtml(d.nome)}</div><div class="small">${escapeHtml(tipoDe(d))} · ${escapeHtml(d.forma)}</div></div><div class="valor num">${moeda(d.valor)}</div></div>`)
+        .map((d) => `<button class="lista-item lista-filtro ${ativoNoFiltro('despesa', serieDe(d.nome)) ? 'filtro-ativo' : ''}" ${filtravel('despesa', serieDe(d.nome), d.nome.replace(RX_PARCELA, ''))}><div class="principal"><div>${escapeHtml(d.nome)}</div><div class="small">${escapeHtml(tipoDe(d))} · ${escapeHtml(d.forma)}</div></div><div class="valor num">${moeda(d.valor)}</div></button>`)
         .join('')}</div>`
     : `<div class="vazio">Sem despesas no ${periodo}.</div>`;
 }
@@ -639,11 +668,12 @@ function ligarSeletores(el, linhas) {
 function linhaDespesa(d, editavel) {
   const desc = d.descOriginal && d.descOriginal !== d.nome ? `<span class="desc-original">${escapeHtml(d.descOriginal)}</span>` : '';
   const texto = (campo) => escapeHtml(SELETORES[campo].opcoes.find(([v]) => rotulo(v) === rotulo(d[campo]))?.[1] || d[campo] || '');
-  return `<tr><td class="tab">${escapeHtml(d.vencimento)}</td><td>${escapeHtml(d.nome)}${desc}</td>
-    <td>${escapeHtml(tipoDe(d))}</td>
+  const celula = (campo, valor, texto, conteudo) => `<span class="filtravel ${ativoNoFiltro(campo, valor) ? 'filtro-ativo' : ''}" ${filtravel(campo, valor, texto)}>${conteudo}</span>`;
+  return `<tr><td class="tab">${escapeHtml(d.vencimento)}</td><td>${celula('despesa', serieDe(d.nome), d.nome.replace(RX_PARCELA, ''), escapeHtml(d.nome))}${desc}</td>
+    <td>${celula('tipo', tipoDe(d), tipoDe(d), escapeHtml(tipoDe(d)))}</td>
     <td class="opc">${editavel ? seletor('categoria', d) : texto('categoria')}</td>
     <td class="opc">${editavel ? seletor('recorrencia', d) : texto('recorrencia')}</td>
-    <td class="text-2 opc">${escapeHtml(d.forma)}</td><td class="tab opc">${escapeHtml(d.parcelas && d.parcelas !== '1/1' ? d.parcelas : '')}</td>
+    <td class="text-2 opc">${d.forma ? celula('forma', d.forma, d.forma, escapeHtml(d.forma)) : ''}</td><td class="tab opc">${escapeHtml(d.parcelas && d.parcelas !== '1/1' ? d.parcelas : '')}</td>
     <td class="opc">${editavel ? seletor('status', d) : statusBadge(d.status)}</td><td class="num">${moeda(d.valor)}</td>
     ${editavel ? `<td class="acao-linha"><button class="btn btn-ghost btn-icone btn-sm" data-editar="${d._linha}" aria-label="Editar ${escapeHtml(d.nome)}" title="Editar" aria-expanded="${editando === d._linha}">✎</button></td>` : ''}</tr>`;
 }

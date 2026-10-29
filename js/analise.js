@@ -223,9 +223,26 @@ export function periodoAnterior(meses) {
 }
 const soma = (lista) => lista.reduce((t, l) => t + (l.valor || 0), 0);
 
-export function totaisMes(dados, mes, filtroTipo = null) {
-  let despesas = doMes(dados.despesas, mes);
-  if (filtroTipo) despesas = despesas.filter((d) => tipoDe(d) === filtroTipo);
+// Filtros da página (clicar num dado filtra; clicar de novo tira). Cada um compara um valor da despesa.
+export const FILTROS = {
+  tipo: { rotulo: 'Tipo', valor: (d) => tipoDe(d) },
+  despesa: { rotulo: 'Despesa', valor: (d) => serieDe(d.nome) },
+  categoria: { rotulo: 'Categoria', valor: (d) => (rotulo(d.categoria) === 'FIXO' ? 'FIXO' : 'VARIAVEL') },
+  recorrencia: { rotulo: 'Recorrência', valor: (d) => (d.recorrencia === 'MENSAL' ? 'MENSAL' : 'EVENTUAL') },
+  forma: { rotulo: 'Forma', valor: (d) => d.forma || '' },
+  status: { rotulo: 'Status', valor: (d) => rotulo(d.status) },
+};
+
+// filtros: { campo: { valor, texto } } — "exceto" ignora alguns (ex.: o quadro de tipos não se filtra pelo tipo)
+export function filtrarDespesas(lista, filtros, exceto = []) {
+  const ativos = Object.entries(filtros || {}).filter(([k, f]) => f && !exceto.includes(k) && FILTROS[k]);
+  if (!ativos.length) return lista;
+  return lista.filter((d) => ativos.every(([k, f]) => FILTROS[k].valor(d) === f.valor));
+}
+
+export function totaisMes(dados, mes, filtros = null) {
+  if (typeof filtros === 'string') filtros = { tipo: { valor: filtros } };
+  const despesas = filtrarDespesas(doMes(dados.despesas, mes), filtros);
   const receitas = doMes(dados.receitas, mes);
   const receita = soma(receitas);
   const despesa = soma(despesas);
@@ -241,11 +258,11 @@ export function totaisMes(dados, mes, filtroTipo = null) {
   };
 }
 
-export function serieMeses(dados, mesFim, n = 12, filtroTipo = null) {
+export function serieMeses(dados, mesFim, n = 12, filtros = null) {
   const meses = [];
   for (let i = n - 1; i >= 0; i--) {
     const mes = somarMeses(mesFim, -i);
-    const t = totaisMes(dados, mes, filtroTipo);
+    const t = totaisMes(dados, mes, filtros);
     meses.push({ mes, receita: t.receita, despesa: t.despesa, saldo: t.saldo });
   }
   return meses;
@@ -253,15 +270,16 @@ export function serieMeses(dados, mesFim, n = 12, filtroTipo = null) {
 
 // Despesas por tipo no período + média dos 6 meses anteriores (só meses com lançamentos),
 // na mesma escala do período (média mensal × nº de meses selecionados)
-export function porTipo(dados, mes) {
+export function porTipo(dados, mes, filtros = null) {
   const meses = Array.isArray(mes) ? [...mes].sort() : [mes];
+  const doFiltro = (lista) => filtrarDespesas(lista, filtros, ['tipo']);
   const atual = new Map();
-  for (const d of doMes(dados.despesas, meses)) atual.set(tipoDe(d), (atual.get(tipoDe(d)) || 0) + d.valor);
+  for (const d of doFiltro(doMes(dados.despesas, meses))) atual.set(tipoDe(d), (atual.get(tipoDe(d)) || 0) + d.valor);
 
   const anteriores = [];
   for (let i = 1; i <= 6; i++) {
     const m = somarMeses(meses[0], -i);
-    const lista = doMes(dados.despesas, m);
+    const lista = doFiltro(doMes(dados.despesas, m));
     if (lista.length) anteriores.push(lista);
   }
   const media = new Map();

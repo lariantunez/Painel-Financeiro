@@ -269,6 +269,21 @@ label.campo .dica { font-weight: 400; color: var(--muted); font-size: 12px; }
 .det-item { display: flex; justify-content: space-between; gap: 12px; padding: 4px 0; border-top: 1px solid var(--border); font-size: 12px; }
 .det-item > span:last-child { white-space: nowrap; display: flex; gap: 8px; align-items: center; }
 
+/* dados clicáveis que filtram a página */
+.filtravel { cursor: pointer; border-radius: 4px; }
+.filtravel:hover { text-decoration: underline; text-decoration-color: var(--border-strong); text-underline-offset: 3px; }
+.filtravel.filtro-ativo { background: var(--accent-soft); color: var(--accent); padding: 1px 4px; margin: -1px -4px; font-weight: 600; }
+h2.filtravel.filtro-ativo { margin: -1px -4px; }
+.split-parte { cursor: pointer; border-radius: 3px; transition: opacity 0.15s; }
+.split-parte.apagada, .legenda-filtro.apagada { opacity: 0.35; }
+.legenda-filtro { border: 0; background: none; padding: 2px 6px; margin: -2px -6px; border-radius: var(--radius-sm); cursor: pointer; display: inline-flex; align-items: center; gap: 6px; color: var(--text-2); font: inherit; font-size: 12px; }
+.legenda-filtro:hover { background: var(--hover); }
+.legenda-filtro.filtro-ativo { background: var(--accent-soft); color: var(--accent); }
+.lista-filtro { width: 100%; border: 0; border-top: 1px solid var(--border); background: none; text-align: left; cursor: pointer; font: inherit; color: inherit; padding: 9px 6px; margin: 0 -6px; width: calc(100% + 12px); border-radius: var(--radius-sm); }
+.lista-filtro:first-child { border-top: 0; }
+.lista-filtro:hover { background: var(--hover); }
+.lista-filtro.filtro-ativo { background: var(--accent-soft); }
+
 .filtro-chip { display: inline-flex; align-items: center; gap: 6px; background: var(--accent-soft); color: var(--accent); border: 0; border-radius: 999px; padding: 5px 12px; cursor: pointer; font-weight: 600; font-size: 12px; }
 
 .kpis { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin-bottom: 12px; }

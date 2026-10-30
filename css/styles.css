@@ -612,14 +612,14 @@ code, .mono { font-family: ui-monospace, 'Cascadia Code', Consolas, monospace; f
 .rosca-item .swatch { width: 10px; height: 10px; border-radius: 3px; }
 
 /* anéis de participação */
-.aneis { display: grid; grid-template-columns: repeat(auto-fit, minmax(96px, 1fr)); gap: 8px; }
+.aneis { display: grid; grid-template-columns: repeat(auto-fit, minmax(112px, 1fr)); gap: 8px; }
 .anel { border: 0; background: none; display: grid; justify-items: center; gap: 4px; padding: 8px 4px; border-radius: var(--radius-sm); cursor: pointer; color: var(--text-2); font: inherit; }
 .anel:hover { background: var(--hover); }
 .anel.filtro-ativo { background: var(--accent-soft); }
 .anel.apagada { opacity: 0.35; }
 .anel svg { width: 76px; height: 76px; }
 .anel-pct { font-size: 17px; font-weight: 700; fill: var(--text); }
-.anel-rotulo { font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.02em; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.anel-rotulo { font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.02em; max-width: 100%; text-align: center; line-height: 1.25; overflow-wrap: break-word; } /* nome inteiro: quebra a linha em vez de cortar */
 
 /* detalhamento de despesas */
 .detalhe { display: grid; grid-template-columns: minmax(0, 1fr) 170px; gap: 18px; }

@@ -193,7 +193,7 @@ export function aneis(itens) {
             stroke-dasharray="${p * c} ${c}" transform="rotate(-90 40 40)"/>` : ''}
           <text x="40" y="45" text-anchor="middle" class="anel-pct">${Math.round(p * 100)}%</text>
         </svg>
-        <span class="anel-rotulo">${escapeHtml(it.rotulo)}</span>
+        <span class="anel-rotulo">${escapeHtml(it.rotulo).replace(/\//g, '/<wbr>')}</span>
       </button>`;
     })
     .join('')}</div>`;

@@ -4,6 +4,8 @@ Painel de receitas e despesas que lê e **alimenta sozinho** a planilha do Googl
 
 Publicado em: https://lariantunez.github.io/Painel-Financeiro/
 
+> **Projeto pessoal**, em uso e evolução contínua: cada melhoria nasce de uma necessidade real da rotina financeira de casa.
+
 ## Rotina mensal
 
 1. **Importar** → arraste a fatura do cartão e o extrato da conta (CSV do Nubank, OFX de qualquer banco ou CSV genérico).
@@ -75,3 +77,7 @@ Passo a passo dentro do próprio painel em **Configurações**. Resumo: colar `C
 ```bash
 python -m http.server 8000   # abra http://localhost:8000
 ```
+
+---
+
+**🇺🇸 English:** a personal finance dashboard that reads bank and credit card statements (Nubank CSV, any bank's OFX or generic CSV) and fills a Google Sheets spreadsheet on its own. It classifies each transaction in layers (ignored movements, installment continuation, learned rules, spreadsheet history, similarity, then asks), remembers every decision for the next months, and every import can be undone. Screens include a multi-month dashboard, a 6/12-month forecast and a financial health analysis. Plain JavaScript modules with no build step, a Google Apps Script backend protected by a token, SVG charts and automated logic tests. A personal project in daily use and continuous development.

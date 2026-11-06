@@ -1,7 +1,7 @@
 // Inicialização, rotas e atualização automática.
 
-import { mesAtual } from './util.js';
-import { carregarDados, dadosEmCache, config, salvarConfig, importarConfiguracaoDoLink } from './api.js';
+import { mesAtual, escapeHtml } from './util.js';
+import { carregarDados, dadosEmCache, config, salvarConfig, importarConfiguracaoDoLink, backendConfigurado } from './api.js';
 import { renderPainel } from './pagina-painel.js';
 import { renderImportar, importacaoEmAndamento } from './pagina-importar.js';
 import { renderAprendizado } from './pagina-aprendizado.js';
@@ -69,12 +69,22 @@ function renderizar() {
   const y = window.scrollY;
   if (mesmaPagina) raiz.style.minHeight = `${raiz.offsetHeight}px`;
   if (estado.rota !== 'painel') $('#lateral-periodo').innerHTML = ''; // anos e meses só fazem sentido no Painel
-  PAGINAS[estado.rota](raiz, app);
+  // Sem dados e a leitura falhou: explica o que fazer em vez de ficar em "Carregando…" (Configurações sempre abre)
+  if (!estado.dados && estado.erro && estado.rota !== 'config') raiz.innerHTML = telaSemDados(estado.erro);
+  else PAGINAS[estado.rota](raiz, app);
   if (mesmaPagina) {
     raiz.style.minHeight = '';
     window.scrollTo({ top: y, behavior: 'instant' });
   }
   atualizarSync();
+}
+
+function telaSemDados(erro) {
+  const titulo = backendConfigurado() ? 'Não consegui ler a sua planilha' : 'Conecte a sua planilha';
+  const texto = backendConfigurado()
+    ? escapeHtml(erro)
+    : 'Este aparelho ainda não está ligado a nenhuma planilha. Em Configurações você conecta a sua — ou abra aqui o link de conexão gerado num aparelho que já está conectado.';
+  return `<div class="vazio"><p><b>${titulo}</b></p><p>${texto}</p><p><a class="btn btn-primario" style="text-decoration:none" href="#/config">Ir para Configurações</a></p></div>`;
 }
 
 function atualizarSync() {
@@ -110,7 +120,8 @@ async function recarregar({ silencioso = false } = {}) {
     }
   } catch (e) {
     estado.erro = e.message;
-    if (!silencioso) toast(e.message, 'erro', 6000);
+    if (!estado.dados) renderizar(); // troca o "Carregando…" pela explicação
+    else if (!silencioso) toast(e.message, 'erro', 6000);
   } finally {
     estado.carregando = false;
     atualizarSync();
@@ -142,9 +153,7 @@ if (link === 'erro') toast('O link de configuração chegou incompleto. No compu
 aplicarTema();
 estado.dados = dadosEmCache();
 renderizar();
-recarregar({ silencioso: true }).then(() => {
-  if (estado.erro && !estado.dados) toast(estado.erro, 'erro', 8000);
-});
+recarregar({ silencioso: true });
 
 window.addEventListener('hashchange', () => {
   renderizar();

@@ -7,14 +7,12 @@ import { normalizarDespesa, normalizarReceita, normalizarRegra } from './model.j
 const CHAVE_CONFIG = 'pf3_config';
 const CHAVE_CACHE = 'pf3_cache';
 const CHAVE_REGRAS_LOCAIS = 'pf3_regras_locais';
-const PLANILHA_PADRAO = '1CJJ-dEYwWpY5tN3XPcEiquNPiguxTO-s2ikUgEOMvk4';
-
 const CONFIG_PADRAO = {
   url: '',
   token: '',
-  planilhaId: PLANILHA_PADRAO,
+  planilhaId: '',
   instituicaoCartao: 'NUBANK',
-  titulares: { NUBANK: 'LARISSA', BRADESCO: 'DOUGLAS', 'ITAÚ': 'LARISSA' },
+  titulares: {},
   tema: 'auto',
 };
 
@@ -72,9 +70,13 @@ export async function carregarDados() {
     if (!bruto.ok) throw new Error(bruto.erro || 'Falha no backend');
     bruto.fonte = 'backend';
   } else {
-    const id = config.planilhaId || PLANILHA_PADRAO;
+    const id = config.planilhaId;
+    if (!id) throw new Error('Nenhuma planilha conectada. Conecte a sua em Configurações.');
     const aba = async (nome) => {
-      const r = await fetch(`https://docs.google.com/spreadsheets/d/${id}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(nome)}`);
+      // Planilha privada: o Google redireciona para o login e o navegador bloqueia a resposta (erro de rede)
+      const r = await fetch(`https://docs.google.com/spreadsheets/d/${id}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(nome)}`).catch(() => {
+        throw new Error('A planilha não está pública. Configure o backend em Configurações.');
+      });
       if (!r.ok) throw new Error(`Não consegui ler a aba ${nome} (HTTP ${r.status})`);
       const texto = await r.text();
       if (texto.trim().startsWith('<')) throw new Error('A planilha não está pública. Configure o backend em Configurações.');
